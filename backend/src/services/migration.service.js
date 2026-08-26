@@ -39,8 +39,13 @@ const STEPS = {
  * @param {string} [params.artifactId]   - omit for PACKAGE scope
  * @returns {Promise<string>} migrationId
  */
-async function start({ user, sourceTenant, targetTenant, packageId, artifactId }) {
-  const scopeType = artifactId ? 'SINGLE_ARTIFACT' : 'PACKAGE';
+async function start({ user, sourceTenant, targetTenant, packageId, artifactId, artifactIds }) {
+  const selectedIds = Array.isArray(artifactIds) ? artifactIds.filter(Boolean) : null;
+  const scopeType = selectedIds && selectedIds.length > 0
+    ? 'SELECTED_ARTIFACTS'
+    : artifactId
+      ? 'SINGLE_ARTIFACT'
+      : 'PACKAGE';
 
   const migrationId = await MigrationModel.create({
     userId: user.userId,
@@ -50,9 +55,7 @@ async function start({ user, sourceTenant, targetTenant, packageId, artifactId }
     scopeType,
   });
 
-  // Run asynchronously so the API call returns immediately with the
-  // migrationId; the frontend polls /migration/:id/status for progress.
-  runPipeline({ migrationId, user, sourceTenant, targetTenant, packageId, artifactId, scopeType }).catch(
+  runPipeline({ migrationId, user, sourceTenant, targetTenant, packageId, artifactId, artifactIds: selectedIds, scopeType }).catch(
     async (err) => {
       await MigrationLogModel.log(migrationId, STEPS.REPORT, 'ERROR', err.message);
       await MigrationModel.setStatus(migrationId, 'FAILED', { completed: true });
@@ -61,8 +64,16 @@ async function start({ user, sourceTenant, targetTenant, packageId, artifactId }
 
   return migrationId;
 }
-
-async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId, artifactId, scopeType, user }) {
+async function startBatch({ user, sourceTenant, targetTenant, packageIds }) {
+  const ids = Array.isArray(packageIds) ? packageIds.filter(Boolean) : [];
+  const results = [];
+  for (const packageId of ids) {
+    const migrationId = await start({ user, sourceTenant, targetTenant, packageId });
+    results.push({ packageId, migrationId });
+  }
+  return results;
+}
+async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId, artifactId, artifactIds, scopeType, user }) {
   // ---- Step 1: GET_PACKAGE ----
     // ---- Step 1: GET_PACKAGE ----
   await logStep(migrationId, STEPS.GET_PACKAGE, 'STARTED');
@@ -100,8 +111,12 @@ async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId,
   // ---- Step 2: GET_ARTIFACTS ----
   await logStep(migrationId, STEPS.GET_ARTIFACTS, 'STARTED');
   const allArtifacts = await packageService.listArtifacts(sourceTenant, packageId);
-  const targetArtifacts =
-    scopeType === 'SINGLE_ARTIFACT' ? allArtifacts.filter((a) => a.id === artifactId) : allArtifacts;
+const targetArtifacts =
+  scopeType === 'SINGLE_ARTIFACT'
+    ? allArtifacts.filter((a) => a.id === artifactId)
+    : scopeType === 'SELECTED_ARTIFACTS'
+      ? allArtifacts.filter((a) => artifactIds.includes(a.id))
+      : allArtifacts;
 
   if (targetArtifacts.length === 0) {
     await logStep(migrationId, STEPS.GET_ARTIFACTS, 'ERROR', 'No artifacts found for this scope');
@@ -486,4 +501,4 @@ async function logStep(migrationId, step, status, message = null) {
   await MigrationLogModel.log(migrationId, step, status, message);
 }
 
-module.exports = { start, getStatus, getReport, STEPS };
+module.exports = { start, startBatch, getStatus, getReport, STEPS };

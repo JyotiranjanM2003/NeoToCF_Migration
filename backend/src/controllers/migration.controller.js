@@ -4,9 +4,10 @@ const migrationService = require('../services/migration.service');
 const MigrationModel = require('../models/Migration.model');
 
 /** POST /api/migration/start  { packageId, artifactId? } */
+/** POST /api/migration/start  { packageId, artifactId?, artifactIds? } */
 async function start(req, res, next) {
   try {
-    const { packageId, artifactId } = req.body;
+    const { packageId, artifactId, artifactIds } = req.body;
     if (!packageId) return res.status(400).json({ message: 'packageId is required' });
 
     const [sourceTenant, targetTenant] = await Promise.all([
@@ -24,9 +25,40 @@ async function start(req, res, next) {
       targetTenant,
       packageId,
       artifactId,
+      artifactIds,
     });
 
     res.status(202).json({ migrationId, status: 'RUNNING' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /api/migration/start-batch  { packageIds: [] } — one run per selected package. */
+async function startBatch(req, res, next) {
+  try {
+    const { packageIds } = req.body;
+    if (!Array.isArray(packageIds) || packageIds.length === 0) {
+      return res.status(400).json({ message: 'packageIds (non-empty array) is required' });
+    }
+
+    const [sourceTenant, targetTenant] = await Promise.all([
+      SourceTenantModel.findByUser(req.user.userId),
+      TargetTenantModel.findByUser(req.user.userId),
+    ]);
+
+    if (!sourceTenant || !targetTenant) {
+      return res.status(400).json({ message: 'Connect both source and target tenants first' });
+    }
+
+    const migrations = await migrationService.startBatch({
+      user: req.user,
+      sourceTenant,
+      targetTenant,
+      packageIds,
+    });
+
+    res.status(202).json({ migrations, status: 'RUNNING' });
   } catch (err) {
     next(err);
   }
@@ -64,4 +96,4 @@ async function list(req, res, next) {
   }
 }
 
-module.exports = { start, getStatus, getReport, list };
+module.exports = { start, startBatch, getStatus, getReport, list };
