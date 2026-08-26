@@ -28,22 +28,27 @@ export default function MigrationProgress({ migration, artifacts }) {
         {migration.COMPLETEDAT && ` · Completed ${new Date(migration.COMPLETEDAT).toLocaleString()}`}
       </p>
 
-      {artifacts?.map((a) => (
+            {artifacts?.map((a) => (
         <div
           key={a.ID}
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
             padding: '8px 0',
             borderTop: '1px solid var(--border)',
             fontSize: 13,
           }}
         >
-          <span>{a.ARTIFACTNAME}</span>
-          <span className={`badge ${STATUS_BADGE[a.STATUS] || 'badge-disconnected'}`}>
-            <span className="dot" />
-            {a.STATUS}
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>{a.ARTIFACTNAME}</span>
+            <span className={`badge ${STATUS_BADGE[a.STATUS] || 'badge-disconnected'}`}>
+              <span className="dot" />
+              {a.STATUS}
+            </span>
+          </div>
+          {a.STATUS === 'FAILED' && a.ERRORMESSAGE && (
+            <div className="mono" style={{ marginTop: 4, color: 'var(--danger)', fontSize: 12 }}>
+              {a.ERRORMESSAGE}
+            </div>
+          )}
         </div>
       ))}
     </div>

@@ -9,6 +9,7 @@
  *  - MIG110 Custom Content -> GetCustomPackages, DownloadPackage, GetArtifacts
  */
 const neoClient = require('./neoClient.service');
+const cfClient = require('./cfClient.service');
 
 /** GET /IntegrationPackages — works for both SAP content and custom packages. */
 async function listPackages(sourceTenant) {
@@ -76,9 +77,15 @@ async function downloadPackageZip(sourceTenant, packageId) {
 }
 
 /** Existence + basic metadata check, used heavily by the validation engine. */
-async function getPackage(tenant, packageId) {
+/**
+ * Existence + basic metadata check, used by the validation engine and the
+ * migration pipeline. Pass `cfClient` when checking the target (CF) tenant —
+ * it uses a different OAuth token endpoint than Neo, so the wrong client
+ * here silently fails auth rather than giving a real 404.
+ */
+async function getPackage(tenant, packageId, client = neoClient) {
   try {
-    const data = await neoClient.get(tenant, `/IntegrationPackages('${packageId}')`);
+    const data = await client.get(tenant, `/IntegrationPackages('${packageId}')`);
     return data.d || null;
   } catch (err) {
     if (err.response?.status === 404) return null;
@@ -86,4 +93,22 @@ async function getPackage(tenant, packageId) {
   }
 }
 
-module.exports = { listPackages, listArtifacts, downloadPackageZip, getPackage, mapArtifactStatus };
+/**
+ * Creates a package on the target tenant. The migration pipeline calls this
+ * when the source package doesn't exist yet on the target — CPI rejects an
+ * artifact upload into a package that isn't there.
+ */
+async function createPackage(tenant, { id, name, shortText, version }, client = cfClient) {
+  const payload = {
+    Id: id,
+    Name: name || id,
+    ShortText: shortText || '',
+    Version: version || '1.0.0',
+  };
+  await client.write(tenant, 'post', '/IntegrationPackages', {
+    data: payload,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+module.exports = { listPackages, listArtifacts, downloadPackageZip, getPackage, createPackage, mapArtifactStatus };

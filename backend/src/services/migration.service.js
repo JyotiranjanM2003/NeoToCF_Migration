@@ -64,6 +64,7 @@ async function start({ user, sourceTenant, targetTenant, packageId, artifactId }
 
 async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId, artifactId, scopeType, user }) {
   // ---- Step 1: GET_PACKAGE ----
+    // ---- Step 1: GET_PACKAGE ----
   await logStep(migrationId, STEPS.GET_PACKAGE, 'STARTED');
   const sourcePackage = await packageService.getPackage(sourceTenant, packageId);
   if (!sourcePackage) {
@@ -71,7 +72,30 @@ async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId,
     await MigrationModel.setStatus(migrationId, 'FAILED', { completed: true });
     return;
   }
-  await logStep(migrationId, STEPS.GET_PACKAGE, 'SUCCESS');
+  await logStep(migrationId, STEPS.GET_PACKAGE, 'SUCCESS', 'Source package confirmed');
+
+  // Ensure the package exists on the TARGET too, creating it if missing —
+  // this is the actual fix: CPI rejects an artifact upload into a package
+  // that doesn't exist on the destination tenant yet.
+  try {
+    const targetPackage = await packageService.getPackage(targetTenant, packageId, cfClient);
+    if (!targetPackage) {
+      await logStep(migrationId, STEPS.GET_PACKAGE, 'STARTED', 'Target package not found — creating it');
+      await packageService.createPackage(targetTenant, {
+        id: packageId,
+        name: sourcePackage.Name,
+        shortText: sourcePackage.ShortText,
+        version: sourcePackage.Version,
+      });
+      await logStep(migrationId, STEPS.GET_PACKAGE, 'SUCCESS', 'Target package created');
+    } else {
+      await logStep(migrationId, STEPS.GET_PACKAGE, 'SUCCESS', 'Target package already exists');
+    }
+  } catch (err) {
+    await logStep(migrationId, STEPS.GET_PACKAGE, 'ERROR', describeError(err));
+    await MigrationModel.setStatus(migrationId, 'FAILED', { completed: true });
+    return;
+  }
 
   // ---- Step 2: GET_ARTIFACTS ----
   await logStep(migrationId, STEPS.GET_ARTIFACTS, 'STARTED');
@@ -100,7 +124,7 @@ async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId,
       version: artifact.version,
     });
 
-    try {
+        try {
       await migrateOneArtifact({
         migrationId,
         migrationArtifactId,
@@ -108,13 +132,12 @@ async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId,
         sourceTenant,
         targetTenant,
         packageId,
-        sourcePackage,
         transformRules,
       });
       await MigrationArtifactModel.setStatus(migrationArtifactId, 'MIGRATED');
       succeeded += 1;
     } catch (err) {
-      await MigrationArtifactModel.setStatus(migrationArtifactId, 'FAILED', err.message);
+      await MigrationArtifactModel.setStatus(migrationArtifactId, 'FAILED', describeError(err));
       failed += 1;
     }
   }
@@ -126,6 +149,82 @@ async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId,
   await logStep(migrationId, STEPS.REPORT, 'SUCCESS', `${succeeded} succeeded, ${failed} failed`);
 }
 
+// /** Runs steps 3-8 for a single artifact. Throws on any hard failure. */
+// async function migrateOneArtifact({
+//   migrationId,
+//   migrationArtifactId,
+//   artifact,
+//   sourceTenant,
+//   targetTenant,
+//   packageId,
+//   sourcePackage,
+//   transformRules,
+// }) {
+//   // ---- Step 3: DOWNLOAD ----
+//   await logStep(migrationId, STEPS.DOWNLOAD, 'STARTED', artifact.name);
+//   const zipBuffer =
+//     artifact.type === 'IFLOW'
+//       ? await iflowService.downloadArtifactZip(sourceTenant, artifact.id)
+//       : await packageService.downloadPackageZip(sourceTenant, packageId); // fallback: package-level zip for non-iFlow types
+//   await logStep(migrationId, STEPS.DOWNLOAD, 'SUCCESS', artifact.name);
+
+//   // ---- Step 4: UPLOAD ----
+//   await logStep(migrationId, STEPS.UPLOAD, 'STARTED', artifact.name);
+//   // await uploadArtifact({ targetTenant, packageId, sourcePackage, artifact, zipBuffer });
+//   await uploadArtifact({ targetTenant, packageId, artifact, zipBuffer });
+//   await logStep(migrationId, STEPS.UPLOAD, 'SUCCESS', artifact.name);
+
+//   if (artifact.type !== 'IFLOW') {
+//     // Value mappings / other artifact types carry no separate "Configurations"
+//     // entity in v1 scope — the package-level import above already moved them.
+//     await logStep(migrationId, STEPS.VALIDATE_TARGET, 'SUCCESS', `${artifact.name} (non-iFlow, config steps skipped)`);
+//     return;
+//   }
+
+//   // ---- Step 5: GET_SOURCE_CONFIG ----
+//   await logStep(migrationId, STEPS.GET_SOURCE_CONFIG, 'STARTED', artifact.name);
+//   const sourceConfig = await iflowService.getConfiguration(sourceTenant, artifact.id);
+//   await logStep(migrationId, STEPS.GET_SOURCE_CONFIG, 'SUCCESS', `${sourceConfig.length} parameter(s)`);
+
+//   // ---- Step 6: TRANSFORM_CONFIG ----
+//   await logStep(migrationId, STEPS.TRANSFORM_CONFIG, 'STARTED', artifact.name);
+//   const transformedConfig = sourceConfig.map((param) => {
+//     const rule = transformRules.find(
+//       (r) =>
+//         (!r.PARAMETERSCOPE || r.PARAMETERSCOPE === param.parameter) &&
+//         typeof param.value === 'string' &&
+//         param.value.includes(r.FINDVALUE)
+//     );
+//     const targetValue = rule ? param.value.split(rule.FINDVALUE).join(rule.REPLACEVALUE) : param.value;
+//     return {
+//       ...param,
+//       targetValue,
+//       status: rule ? 'TRANSFORMED' : 'CARRIED_OVER',
+//     };
+//   });
+
+//   for (const param of transformedConfig) {
+//     await MigrationConfigurationModel.create({
+//       migrationArtifactId,
+//       parameterName: param.parameter,
+//       parameterDataType: param.dataType,
+//       sourceValue: param.value,
+//       targetValue: param.targetValue,
+//       status: param.status,
+//     });
+//   }
+//   await logStep(migrationId, STEPS.TRANSFORM_CONFIG, 'SUCCESS', artifact.name);
+
+//   // ---- Step 7: UPLOAD_CONFIG ----
+//   await logStep(migrationId, STEPS.UPLOAD_CONFIG, 'STARTED', artifact.name);
+//   await uploadConfiguration({ targetTenant, artifactId: artifact.id, config: transformedConfig });
+//   await logStep(migrationId, STEPS.UPLOAD_CONFIG, 'SUCCESS', artifact.name);
+
+//   // ---- Step 8: VALIDATE_TARGET ----
+//   await logStep(migrationId, STEPS.VALIDATE_TARGET, 'STARTED', artifact.name);
+//   await cfClient.get(targetTenant, `/IntegrationDesigntimeArtifacts(Id='${artifact.id}',Version='active')`);
+//   await logStep(migrationId, STEPS.VALIDATE_TARGET, 'SUCCESS', artifact.name);
+// }
 /** Runs steps 3-8 for a single artifact. Throws on any hard failure. */
 async function migrateOneArtifact({
   migrationId,
@@ -134,75 +233,120 @@ async function migrateOneArtifact({
   sourceTenant,
   targetTenant,
   packageId,
-  sourcePackage,
   transformRules,
 }) {
-  // ---- Step 3: DOWNLOAD ----
-  await logStep(migrationId, STEPS.DOWNLOAD, 'STARTED', artifact.name);
-  const zipBuffer =
-    artifact.type === 'IFLOW'
-      ? await iflowService.downloadArtifactZip(sourceTenant, artifact.id)
-      : await packageService.downloadPackageZip(sourceTenant, packageId); // fallback: package-level zip for non-iFlow types
-  await logStep(migrationId, STEPS.DOWNLOAD, 'SUCCESS', artifact.name);
+  let currentStep = STEPS.DOWNLOAD;
 
-  // ---- Step 4: UPLOAD ----
-  await logStep(migrationId, STEPS.UPLOAD, 'STARTED', artifact.name);
-  // await uploadArtifact({ targetTenant, packageId, sourcePackage, artifact, zipBuffer });
-  await uploadArtifact({ targetTenant, packageId, artifact, zipBuffer });
-  await logStep(migrationId, STEPS.UPLOAD, 'SUCCESS', artifact.name);
+  try {
+    // ---- Step 3: DOWNLOAD ----
+    currentStep = STEPS.DOWNLOAD;
+    await logStep(migrationId, STEPS.DOWNLOAD, 'STARTED', artifact.name);
+    const zipBuffer =
+      artifact.type === 'IFLOW'
+        ? await iflowService.downloadArtifactZip(sourceTenant, artifact.id)
+        : await packageService.downloadPackageZip(sourceTenant, packageId); // fallback: package-level zip for non-iFlow types
+    await logStep(migrationId, STEPS.DOWNLOAD, 'SUCCESS', artifact.name);
 
-  if (artifact.type !== 'IFLOW') {
-    // Value mappings / other artifact types carry no separate "Configurations"
-    // entity in v1 scope — the package-level import above already moved them.
-    await logStep(migrationId, STEPS.VALIDATE_TARGET, 'SUCCESS', `${artifact.name} (non-iFlow, config steps skipped)`);
-    return;
-  }
+    // ---- Step 4: UPLOAD ----
+    currentStep = STEPS.UPLOAD;
+    await logStep(migrationId, STEPS.UPLOAD, 'STARTED', artifact.name);
+    await uploadArtifact({ targetTenant, packageId, artifact, zipBuffer });
+    await logStep(migrationId, STEPS.UPLOAD, 'SUCCESS', artifact.name);
 
-  // ---- Step 5: GET_SOURCE_CONFIG ----
-  await logStep(migrationId, STEPS.GET_SOURCE_CONFIG, 'STARTED', artifact.name);
-  const sourceConfig = await iflowService.getConfiguration(sourceTenant, artifact.id);
-  await logStep(migrationId, STEPS.GET_SOURCE_CONFIG, 'SUCCESS', `${sourceConfig.length} parameter(s)`);
+    if (artifact.type !== 'IFLOW') {
+      // Value mappings / other artifact types carry no separate "Configurations"
+      // entity in v1 scope — the package-level import above already moved them.
+      currentStep = STEPS.VALIDATE_TARGET;
+      await logStep(migrationId, STEPS.VALIDATE_TARGET, 'SUCCESS', `${artifact.name} (non-iFlow, config steps skipped)`);
+      return;
+    }
 
-  // ---- Step 6: TRANSFORM_CONFIG ----
-  await logStep(migrationId, STEPS.TRANSFORM_CONFIG, 'STARTED', artifact.name);
-  const transformedConfig = sourceConfig.map((param) => {
-    const rule = transformRules.find(
-      (r) =>
-        (!r.PARAMETERSCOPE || r.PARAMETERSCOPE === param.parameter) &&
-        typeof param.value === 'string' &&
-        param.value.includes(r.FINDVALUE)
-    );
-    const targetValue = rule ? param.value.split(rule.FINDVALUE).join(rule.REPLACEVALUE) : param.value;
-    return {
-      ...param,
-      targetValue,
-      status: rule ? 'TRANSFORMED' : 'CARRIED_OVER',
-    };
-  });
+    // ---- Step 5: GET_SOURCE_CONFIG ----
+    currentStep = STEPS.GET_SOURCE_CONFIG;
+    await logStep(migrationId, STEPS.GET_SOURCE_CONFIG, 'STARTED', artifact.name);
+    const sourceConfig = await iflowService.getConfiguration(sourceTenant, artifact.id);
+    await logStep(migrationId, STEPS.GET_SOURCE_CONFIG, 'SUCCESS', `${sourceConfig.length} parameter(s)`);
 
-  for (const param of transformedConfig) {
-    await MigrationConfigurationModel.create({
-      migrationArtifactId,
-      parameterName: param.parameter,
-      parameterDataType: param.dataType,
-      sourceValue: param.value,
-      targetValue: param.targetValue,
-      status: param.status,
+    // ---- Step 6: TRANSFORM_CONFIG ----
+    currentStep = STEPS.TRANSFORM_CONFIG;
+    await logStep(migrationId, STEPS.TRANSFORM_CONFIG, 'STARTED', artifact.name);
+    const transformedConfig = sourceConfig.map((param) => {
+      const rule = transformRules.find(
+        (r) =>
+          (!r.PARAMETERSCOPE || r.PARAMETERSCOPE === param.parameter) &&
+          typeof param.value === 'string' &&
+          param.value.includes(r.FINDVALUE)
+      );
+      const targetValue = rule ? param.value.split(rule.FINDVALUE).join(rule.REPLACEVALUE) : param.value;
+      return {
+        ...param,
+        targetValue,
+        status: rule ? 'TRANSFORMED' : 'CARRIED_OVER',
+      };
     });
+
+    for (const param of transformedConfig) {
+      await MigrationConfigurationModel.create({
+        migrationArtifactId,
+        parameterName: param.parameter,
+        parameterDataType: param.dataType,
+        sourceValue: param.value,
+        targetValue: param.targetValue,
+        status: param.status,
+      });
+    }
+    await logStep(migrationId, STEPS.TRANSFORM_CONFIG, 'SUCCESS', artifact.name);
+
+    // ---- Step 7: UPLOAD_CONFIG ----
+    currentStep = STEPS.UPLOAD_CONFIG;
+    await logStep(migrationId, STEPS.UPLOAD_CONFIG, 'STARTED', artifact.name);
+    await uploadConfiguration({ targetTenant, artifactId: artifact.id, config: transformedConfig });
+    await logStep(migrationId, STEPS.UPLOAD_CONFIG, 'SUCCESS', artifact.name);
+
+    // ---- Step 8: VALIDATE_TARGET ----
+    currentStep = STEPS.VALIDATE_TARGET;
+    await logStep(migrationId, STEPS.VALIDATE_TARGET, 'STARTED', artifact.name);
+    await cfClient.get(targetTenant, `/IntegrationDesigntimeArtifacts(Id='${artifact.id}',Version='active')`);
+    await logStep(migrationId, STEPS.VALIDATE_TARGET, 'SUCCESS', artifact.name);
+  } catch (err) {
+    // This is the fix: log the REAL upstream error against the step that
+    // failed, instead of letting it disappear into a generic FAILED status.
+    await logStep(migrationId, currentStep, 'ERROR', describeError(err));
+    throw err;
   }
-  await logStep(migrationId, STEPS.TRANSFORM_CONFIG, 'SUCCESS', artifact.name);
-
-  // ---- Step 7: UPLOAD_CONFIG ----
-  await logStep(migrationId, STEPS.UPLOAD_CONFIG, 'STARTED', artifact.name);
-  await uploadConfiguration({ targetTenant, artifactId: artifact.id, config: transformedConfig });
-  await logStep(migrationId, STEPS.UPLOAD_CONFIG, 'SUCCESS', artifact.name);
-
-  // ---- Step 8: VALIDATE_TARGET ----
-  await logStep(migrationId, STEPS.VALIDATE_TARGET, 'STARTED', artifact.name);
-  await cfClient.get(targetTenant, `/IntegrationDesigntimeArtifacts(Id='${artifact.id}',Version='active')`);
-  await logStep(migrationId, STEPS.VALIDATE_TARGET, 'SUCCESS', artifact.name);
 }
 
+/**
+ * Turns an axios error (or anything else) into a readable string that
+ * includes the upstream tenant's actual response body when there is one —
+ * SAP OData errors are usually { error: { message: { value: '...' } } } —
+ * so the Migration Report log shows the real cause, not just "Request
+ * failed with status code 400".
+ */
+function describeError(err) {
+  const status = err.response?.status;
+  const data = err.response?.data;
+
+  if (data) {
+    let detail;
+    if (typeof data === 'string') {
+      detail = data;
+    } else if (data?.error?.message?.value) {
+      detail = data.error.message.value;
+    } else if (data?.message) {
+      detail = data.message;
+    } else {
+      try {
+        detail = JSON.stringify(data);
+      } catch {
+        detail = String(data);
+      }
+    }
+    return `HTTP ${status || '?'}: ${detail}`.slice(0, 1900);
+  }
+
+  return err.message || String(err);
+}
 /**
  * Uploads a package/artifact zip to the target tenant.
  * Package-level: POST /IntegrationPackages?Overwrite=true (MIG110 UploadPackage pattern)
@@ -281,16 +425,38 @@ async function uploadConfiguration({ targetTenant, artifactId, config }) {
   });
 }
 
+/**
+ * Builds a spec-correct OData v2 $batch multipart body. PUT/POST/DELETE
+ * requests must be wrapped in a nested "changeset" (its own multipart
+ * boundary), and every part needs `Content-Type: application/http` +
+ * `Content-Transfer-Encoding: binary` before the embedded HTTP request line
+ * — without these, CPI's batch parser can't find the method/entity and
+ * rejects the whole request with a parsing error.
+ */
 function buildConfigBatchPayload(artifactId, config) {
-  // Minimal OData $batch multipart body — one ChangeSet per configuration
-  // parameter update. Kept as a plain builder so it's easy to unit test.
-  const parts = config.map(
-    (param) =>
+  const batchBoundary = 'batch_config';
+  const changesetBoundary = 'changeset_config';
+
+  const changesetParts = config.map((param) => {
+    const body = JSON.stringify({ ParameterValue: param.targetValue });
+    return (
+      `--${changesetBoundary}\r\n` +
+      `Content-Type: application/http\r\n` +
+      `Content-Transfer-Encoding: binary\r\n\r\n` +
       `PUT IntegrationDesigntimeArtifacts(Id='${artifactId}',Version='active')/Configurations('${param.parameter}') HTTP/1.1\r\n` +
-      `Content-Type: application/json\r\n\r\n` +
-      `${JSON.stringify({ ParameterValue: param.targetValue })}\r\n`
-  );
-  return `--batch_config\r\n${parts.join('--batch_config\r\n')}--batch_config--`;
+      `Content-Type: application/json\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n` +
+      `${body}\r\n`
+    );
+  });
+
+  const changeset =
+    `--${batchBoundary}\r\n` +
+    `Content-Type: multipart/mixed; boundary=${changesetBoundary}\r\n\r\n` +
+    changesetParts.join('') +
+    `--${changesetBoundary}--\r\n`;
+
+  return `${changeset}--${batchBoundary}--`;
 }
 
 async function getStatus(migrationId, userId) {
