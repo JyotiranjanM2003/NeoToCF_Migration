@@ -1,7 +1,7 @@
 const SourceTenantModel = require('../models/SourceTenant.model');
 const neoClient = require('../services/neoClient.service');
 const encrypt = require('../utils/encrypt');
-
+const tokenCache = require('../services/tokenCache.service');
 /**
  * POST /api/tenants/source
  * Saves (or updates) the caller's Neo tenant connection details, then tests
@@ -30,6 +30,10 @@ async function connect(req, res, next) {
       srcAccountId,
     });
 
+    // Credentials just changed — any cached token from the OLD credentials
+    // must not be reused, or a wrong password here would silently "pass"
+    // using a still-valid token from a previous successful connection.
+    tokenCache.clear(`source:${sourceTenantId}`);
     const tenant = await SourceTenantModel.findByUser(req.user.userId);
     const result = await neoClient.testConnection(tenant);
 
@@ -64,10 +68,20 @@ async function getStatus(req, res, next) {
 }
 
 /** POST /api/tenants/source/test - re-test an already-saved connection. */
+// async function testExisting(req, res, next) {
+//   try {
+//     const tenant = await SourceTenantModel.findByUser(req.user.userId);
+//     if (!tenant) return res.status(404).json({ message: 'No source tenant configured yet' });
+
+//     const result = await neoClient.testConnection(tenant);
 async function testExisting(req, res, next) {
   try {
     const tenant = await SourceTenantModel.findByUser(req.user.userId);
     if (!tenant) return res.status(404).json({ message: 'No source tenant configured yet' });
+
+    // Force a real re-check rather than trusting a cached token that might
+    // outlive credentials revoked on SAP's side.
+    tokenCache.clear(`source:${tenant.SOURCETENANTID}`);
 
     const result = await neoClient.testConnection(tenant);
     await SourceTenantModel.setConnectionStatus(tenant.SOURCETENANTID, result.success ? 'CONNECTED' : 'ERROR');

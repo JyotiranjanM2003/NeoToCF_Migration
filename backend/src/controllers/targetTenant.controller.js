@@ -1,7 +1,7 @@
 const TargetTenantModel = require('../models/TargetTenant.model');
 const cfClient = require('../services/cfClient.service');
 const encrypt = require('../utils/encrypt');
-
+const tokenCache = require('../services/tokenCache.service');
 /**
  * POST /api/tenants/target
  * Saves (or updates) the caller's CF tenant connection details, then tests
@@ -28,6 +28,20 @@ async function connect(req, res, next) {
 
     const oauthClientSecretEnc = encrypt.encrypt(oauthClientSecret);
 
+    // const targetTenantId = await TargetTenantModel.upsert({
+    //   userId: req.user.userId,
+    //   tenantName,
+    //   host,
+    //   tokenHost,
+    //   oauthClientId,
+    //   oauthClientSecretEnc,
+    //   tgtDomain,
+    //   cfOrgId,
+    //   spaceName,
+    // });
+
+    // const tenant = await TargetTenantModel.findByUser(req.user.userId);
+    // const result = await cfClient.testConnection(tenant);
     const targetTenantId = await TargetTenantModel.upsert({
       userId: req.user.userId,
       tenantName,
@@ -40,9 +54,12 @@ async function connect(req, res, next) {
       spaceName,
     });
 
+    // Same reasoning as the source tenant: clear any cached token from the
+    // OLD credentials before testing the newly-saved ones.
+    tokenCache.clear(`target:${targetTenantId}`);
+
     const tenant = await TargetTenantModel.findByUser(req.user.userId);
     const result = await cfClient.testConnection(tenant);
-
     await TargetTenantModel.setConnectionStatus(targetTenantId, result.success ? 'CONNECTED' : 'ERROR');
 
     res.status(result.success ? 200 : 502).json({
@@ -74,10 +91,18 @@ async function getStatus(req, res, next) {
 }
 
 /** POST /api/tenants/target/test - re-test an already-saved connection. */
+// async function testExisting(req, res, next) {
+//   try {
+//     const tenant = await TargetTenantModel.findByUser(req.user.userId);
+//     if (!tenant) return res.status(404).json({ message: 'No target tenant configured yet' });
+
+//     const result = await cfClient.testConnection(tenant);
 async function testExisting(req, res, next) {
   try {
     const tenant = await TargetTenantModel.findByUser(req.user.userId);
     if (!tenant) return res.status(404).json({ message: 'No target tenant configured yet' });
+
+    tokenCache.clear(`target:${tenant.TARGETTENANTID}`);
 
     const result = await cfClient.testConnection(tenant);
     await TargetTenantModel.setConnectionStatus(tenant.TARGETTENANTID, result.success ? 'CONNECTED' : 'ERROR');

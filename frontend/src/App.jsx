@@ -11,7 +11,7 @@ import IflowDetail from './pages/IflowDetail.jsx';
 import MigrationReport from './pages/MigrationReport.jsx';
 import TransformRules from './pages/TransformRules.jsx';
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx';
-
+import BatchMigrationReport from './pages/BatchMigrationReport.jsx';
 export default function App() {
   return (
     <Routes>
@@ -25,6 +25,9 @@ export default function App() {
       <Route path="/packages" element={<ProtectedRoute><Packages /></ProtectedRoute>} />
       <Route path="/packages/:packageId" element={<ProtectedRoute><PackageDetail /></ProtectedRoute>} />
       <Route path="/packages/:packageId/iflows/:id" element={<ProtectedRoute><IflowDetail /></ProtectedRoute>} />
+
+      <Route path="/migrations/batch/:batchId" element={<ProtectedRoute><BatchMigrationReport /></ProtectedRoute>} />
+      <Route path="/migrations/:id" element={<ProtectedRoute><MigrationReport /></ProtectedRoute>} />
 
       <Route path="/migrations/:id" element={<ProtectedRoute><MigrationReport /></ProtectedRoute>} />
       <Route path="/transform-rules" element={<ProtectedRoute><TransformRules /></ProtectedRoute>} />
