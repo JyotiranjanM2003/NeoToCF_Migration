@@ -1,52 +1,9 @@
-// import React, { useEffect, useState } from 'react';
-// import { Link } from 'react-router-dom';
-// import AppShell from '../components/layout/AppShell.jsx';
-// import PackageCard from '../components/package/PackageCard.jsx';
-// import * as packageApi from '../services/api/package.api';
-
-// export default function Packages() {
-//   const [packages, setPackages] = useState(null);
-//   const [error, setError] = useState('');
-
-//   useEffect(() => {
-//     packageApi
-//       .listPackages()
-//       .then((data) => setPackages(data.packages))
-//       .catch((err) => setError(err.response?.data?.message || 'Failed to load packages'));
-//   }, []);
-
-//   return (
-//     <AppShell>
-//       <h2 style={{ marginBottom: 16 }}>Packages</h2>
-
-//       {error && (
-//         <div className="error-banner">
-//           {error}{' '}
-//           <Link to="/dashboard" style={{ color: 'inherit', textDecoration: 'underline' }}>
-//             Go connect your tenants
-//           </Link>
-//         </div>
-//       )}
-
-//       {!error && !packages && <div className="empty-state">Loading packages from source tenant…</div>}
-
-//       {packages?.length === 0 && <div className="empty-state">No packages found on the source tenant.</div>}
-
-//       {packages?.map((pkg) => (
-//         <PackageCard key={pkg.id} pkg={pkg} />
-//       ))}
-//     </AppShell>
-//   );
-// }
-
-
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
-import PackageCard from '../components/package/PackageCard.jsx';
+import PackageTable from '../components/package/PackageTable.jsx';
 import * as packageApi from '../services/api/package.api';
 import * as migrationApi from '../services/api/migration.api';
-import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
 
 export default function Packages() {
   const navigate = useNavigate();
@@ -55,20 +12,28 @@ export default function Packages() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [starting, setStarting] = useState(false);
   const [activeBatch, setActiveBatch] = useState(null);
-const [migrationInfo, setMigrationInfo] = useState(null); // { status, lastMigratedAt } | null
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     packageApi
       .listPackages()
       .then((data) => setPackages(data.packages))
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load packages'));
+      .catch((err) => {
+        const code = err.response?.data?.code;
+        if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
+          navigate('/dashboard', {
+            replace: true,
+            state: { notice: err.response.data.message || 'Select a source tenant to browse packages.' },
+          });
+          return;
+        }
+        setError(err.response?.data?.message || 'Failed to load packages');
+      });
 
-    // Resume support: if a batch migration is still running from an earlier
-    // session, offer to jump straight to its report instead of starting over.
     migrationApi
       .getActiveBatch()
       .then((data) => setActiveBatch(data.batch))
-      .catch(() => {}); // non-fatal — just means no "continue" banner
+      .catch(() => {});
   }, []);
 
   function toggleSelect(packageId) {
@@ -88,6 +53,26 @@ const [migrationInfo, setMigrationInfo] = useState(null); // { status, lastMigra
     setSelectedIds(new Set());
   }
 
+  // Wires the table's header checkbox to the exact same selectedIds state —
+  // no new selection logic, just applied to whatever's currently visible
+  // under the search filter.
+  function toggleSelectAll() {
+    const allVisibleSelected = visiblePackages.length > 0 && visiblePackages.every((p) => selectedIds.has(p.id));
+    if (allVisibleSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visiblePackages.forEach((p) => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visiblePackages.forEach((p) => next.add(p.id));
+        return next;
+      });
+    }
+  }
+
   async function handleMigrateSelected() {
     setStarting(true);
     setError('');
@@ -101,10 +86,42 @@ const [migrationInfo, setMigrationInfo] = useState(null); // { status, lastMigra
   }
 
   const selectedCount = selectedIds.size;
-  const alreadyMigratedCount = (packages || []).filter((p) => p.migrationStatus === 'SUCCESS').length;
+
+  // Client-side filter only — doesn't touch the packages state or selection
+  // logic, so selections made before typing a search term are preserved.
+  const visiblePackages = (packages || []).filter((p) =>
+    p.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
   return (
     <AppShell>
-      <h2 style={{ marginBottom: 16 }}>Packages</h2>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 16,
+          flexWrap: 'wrap',
+          gap: 8,
+        }}
+      >
+        <h2 style={{ margin: 0 }}>Integration Packages{packages ? ` (${packages.length})` : ''}</h2>
+        {packages && packages.length > 0 && (
+          <input
+            type="text"
+            placeholder="Search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              padding: '7px 10px',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              fontSize: 13,
+              width: 220,
+            }}
+          />
+        )}
+      </div>
 
       {activeBatch && (
         <div
@@ -144,7 +161,11 @@ const [migrationInfo, setMigrationInfo] = useState(null); // { status, lastMigra
 
       {packages?.length === 0 && <div className="empty-state">No packages found on the source tenant.</div>}
 
-      {/* {packages && packages.length > 0 && (
+      {packages && packages.length > 0 && visiblePackages.length === 0 && (
+        <div className="empty-state">No packages match "{search}".</div>
+      )}
+
+      {visiblePackages.length > 0 && (
         <div
           style={{
             display: 'flex',
@@ -164,44 +185,6 @@ const [migrationInfo, setMigrationInfo] = useState(null); // { status, lastMigra
             <span className="badge badge-connected">
               <span className="dot" />
               {selectedCount} selected
-            </span>
-          )}
-          <div style={{ flex: 1 }} />
-          <button
-            className="btn btn-primary"
-            style={{ width: 'auto' }}
-            onClick={handleMigrateSelected}
-            disabled={selectedCount === 0 || starting}
-          >
-            {starting ? 'Starting…' : `Migrate selected packages (${selectedCount})`}
-          </button>
-        </div>
-      )} */}
-        {packages && packages.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: 16,
-            flexWrap: 'wrap',
-          }}
-        >
-          <button className="btn btn-secondary" onClick={selectAll}>
-            Select all
-          </button>
-          <button className="btn btn-secondary" onClick={deselectAll} disabled={selectedCount === 0}>
-            Deselect all
-          </button>
-          {selectedCount > 0 && (
-            <span className="badge badge-connected">
-              <span className="dot" />
-              {selectedCount} selected
-            </span>
-          )}
-          {alreadyMigratedCount > 0 && (
-            <span className="helper-text">
-              {alreadyMigratedCount} of {packages.length} already migrated
             </span>
           )}
           <div style={{ flex: 1 }} />
@@ -216,9 +199,14 @@ const [migrationInfo, setMigrationInfo] = useState(null); // { status, lastMigra
         </div>
       )}
 
-      {packages?.map((pkg) => (
-        <PackageCard key={pkg.id} pkg={pkg} selected={selectedIds.has(pkg.id)} onToggleSelect={toggleSelect} />
-      ))}
+      {visiblePackages.length > 0 && (
+        <PackageTable
+          packages={visiblePackages}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleSelectAll={toggleSelectAll}
+        />
+      )}
     </AppShell>
   );
 }

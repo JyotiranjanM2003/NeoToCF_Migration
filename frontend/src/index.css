@@ -347,6 +347,59 @@ a:focus-visible {
 }
 
 .section-gap { margin-bottom: 28px; }
+/* ---------- onboarding stepper ---------- */
+.stepper {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.step-num {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+}
+
+.step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.step.done .step-num {
+  background: var(--accent);
+  color: white;
+}
+.step.done .step-label { color: var(--ink); }
+
+.step.current {
+  border-color: var(--accent);
+}
+.step.current .step-num {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent);
+}
+.step.current .step-label { color: var(--ink); }
 
 .empty-state {
   border: 1px dashed var(--border);

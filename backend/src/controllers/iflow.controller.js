@@ -1,14 +1,34 @@
-const SourceTenantModel = require('../models/SourceTenant.model');
+// const SourceTenantModel = require('../models/SourceTenant.model');
+// const iflowService = require('../services/iflow.service');
+// const { sendZip } = require('../utils/zipHandler');
+
+// async function requireSourceTenant(req, res) {
+//   const tenant = await SourceTenantModel.findByUser(req.user.userId);
+//   if (!tenant || tenant.CONNECTIONSTATUS !== 'CONNECTED') {
+//     res.status(400).json({ message: 'Connect and verify the source tenant first' });
+//     return null;
+//   }
+//   return tenant;
+// }
+
+const tenantSelection = require('../services/tenantSelection.service');
 const iflowService = require('../services/iflow.service');
 const { sendZip } = require('../utils/zipHandler');
 
 async function requireSourceTenant(req, res) {
-  const tenant = await SourceTenantModel.findByUser(req.user.userId);
-  if (!tenant || tenant.CONNECTIONSTATUS !== 'CONNECTED') {
-    res.status(400).json({ message: 'Connect and verify the source tenant first' });
+  const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+
+  if (!sourceTenant) {
+    res.status(400).json({ code: 'NO_SOURCE_SELECTED', message: 'Select a source tenant first' });
     return null;
   }
-  return tenant;
+  if (sourceTenant.CONNECTIONSTATUS !== 'CONNECTED') {
+    res
+      .status(400)
+      .json({ code: 'SOURCE_NOT_CONNECTED', message: 'The selected source tenant is not connected — reconfigure it' });
+    return null;
+  }
+  return sourceTenant;
 }
 
 /** GET /api/iflows/:id?packageId=... */
