@@ -124,6 +124,7 @@ const UserTenantSelectionModel = require('../models/UserTenantSelection.model');
 const cfClient = require('../services/cfClient.service');
 const tokenCache = require('../services/tokenCache.service');
 const encrypt = require('../utils/encrypt');
+const tenantDeletionService = require('../services/tenantDeletion.service');
 
 /** GET /api/tenants/target — list every CF tenant this user has added. */
 async function list(req, res, next) {
@@ -285,5 +286,17 @@ async function testAndPersist(targetTenantId, userId) {
   await TargetTenantModel.setConnectionStatus(targetTenantId, result.success ? 'CONNECTED' : 'ERROR');
   return result;
 }
+/** DELETE /api/tenants/target/:id — removes the tenant and every migration that used it. */
+async function remove(req, res, next) {
+  try {
+    const tenant = await TargetTenantModel.findById(req.params.id, req.user.userId);
+    if (!tenant) return res.status(404).json({ message: 'Target tenant not found' });
 
-module.exports = { list, getOne, create, update, test, select };
+    await tenantDeletionService.deleteTargetTenant(req.params.id, req.user.userId);
+    res.json({ deleted: true, targetTenantId: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { list, getOne, create, update, test, select, remove };

@@ -21,4 +21,8 @@ async function listForMigration(migrationId) {
   return query(`SELECT * FROM ${TABLE} WHERE MigrationId = ?`, [migrationId]);
 }
 
-module.exports = { create, setStatus, listForMigration };
+async function deleteForMigration(migrationId) {
+  await query(`DELETE FROM ${TABLE} WHERE MigrationId = ?`, [migrationId]);
+}
+
+module.exports = { create, setStatus, listForMigration, deleteForMigration };

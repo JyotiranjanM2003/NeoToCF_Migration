@@ -110,4 +110,10 @@ async function setConnectionStatus(sourceTenantId, status) {
   );
 }
 
-module.exports = { create, update, listByUser, findById, setConnectionStatus };
+
+async function deleteById(sourceTenantId, userId) {
+  await query(`DELETE FROM ${TABLE} WHERE SourceTenantId = ? AND UserId = ?`, [sourceTenantId, userId]);
+}
+
+module.exports = { create, update, listByUser, findById, setConnectionStatus, deleteById };
+//module.exports = { create, update, listByUser, findById, setConnectionStatus };

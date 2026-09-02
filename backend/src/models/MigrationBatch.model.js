@@ -38,4 +38,15 @@ async function findActiveForUser(userId) {
   return rows[0] || null;
 }
 
-module.exports = { create, setStatus, findById, findActiveForUser };
+
+async function deleteForSourceTenant(sourceTenantId) {
+  await query(`DELETE FROM ${TABLE} WHERE SourceTenantId = ?`, [sourceTenantId]);
+}
+
+async function deleteForTargetTenant(targetTenantId) {
+  await query(`DELETE FROM ${TABLE} WHERE TargetTenantId = ?`, [targetTenantId]);
+}
+
+
+module.exports = { create, setStatus, findById, findActiveForUser, deleteForSourceTenant, deleteForTargetTenant };
+//module.exports = { create, setStatus, findById, findActiveForUser };

@@ -21,5 +21,11 @@ async function setStatus(id, status) {
 async function listForArtifact(migrationArtifactId) {
   return query(`SELECT * FROM ${TABLE} WHERE MigrationArtifactId = ?`, [migrationArtifactId]);
 }
-
-module.exports = { create, setStatus, listForArtifact };
+/** Deletes every configuration row belonging to any artifact of this migration. */
+async function deleteForMigration(migrationId) {
+  await query(
+    `DELETE FROM ${TABLE} WHERE MigrationArtifactId IN (SELECT Id FROM MIGRATION_ARTIFACT WHERE MigrationId = ?)`,
+    [migrationId]
+  );
+}
+module.exports = { create, setStatus, listForArtifact, deleteForMigration };

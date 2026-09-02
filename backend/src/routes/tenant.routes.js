@@ -36,6 +36,7 @@ router.get('/source/:id', sourceTenantController.getOne);
 router.put('/source/:id', sourceTenantController.update);
 router.post('/source/:id/test', sourceTenantController.test);
 router.post('/source/:id/select', sourceTenantController.select);
+router.delete('/source/:id', sourceTenantController.remove);
 
 // Target (Cloud Foundry) — multiple tenants per user
 router.get('/target', targetTenantController.list);
@@ -44,5 +45,6 @@ router.get('/target/:id', targetTenantController.getOne);
 router.put('/target/:id', targetTenantController.update);
 router.post('/target/:id/test', targetTenantController.test);
 router.post('/target/:id/select', targetTenantController.select);
+router.delete('/target/:id', targetTenantController.remove); 
 
 module.exports = router;

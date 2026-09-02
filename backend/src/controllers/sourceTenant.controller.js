@@ -103,6 +103,7 @@ const UserTenantSelectionModel = require('../models/UserTenantSelection.model');
 const neoClient = require('../services/neoClient.service');
 const tokenCache = require('../services/tokenCache.service');
 const encrypt = require('../utils/encrypt');
+const tenantDeletionService = require('../services/tenantDeletion.service');
 
 /** GET /api/tenants/source — list every Neo tenant this user has added. */
 async function list(req, res, next) {
@@ -265,4 +266,18 @@ async function testAndPersist(sourceTenantId, userId) {
   return result;
 }
 
-module.exports = { list, getOne, create, update, test, select };
+/** DELETE /api/tenants/source/:id — removes the tenant and every migration that used it. */
+async function remove(req, res, next) {
+  try {
+    const tenant = await SourceTenantModel.findById(req.params.id, req.user.userId);
+    if (!tenant) return res.status(404).json({ message: 'Source tenant not found' });
+
+    await tenantDeletionService.deleteSourceTenant(req.params.id, req.user.userId);
+    res.json({ deleted: true, sourceTenantId: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { list, getOne, create, update, test, select, remove };
+//module.exports = { list, getOne, create, update, test, select };

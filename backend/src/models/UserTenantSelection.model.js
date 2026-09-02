@@ -39,4 +39,21 @@ async function setTargetTenant(userId, targetTenantId) {
   }
 }
 
-module.exports = { getSelection, setSourceTenant, setTargetTenant };
+
+/** Un-selects this source tenant for the user, if it's currently their selection. */
+async function clearSourceIfSelected(userId, sourceTenantId) {
+  await query(
+    `UPDATE ${TABLE} SET SourceTenantId = NULL, UpdatedAt = CURRENT_TIMESTAMP WHERE UserId = ? AND SourceTenantId = ?`,
+    [userId, sourceTenantId]
+  );
+}
+
+/** Un-selects this target tenant for the user, if it's currently their selection. */
+async function clearTargetIfSelected(userId, targetTenantId) {
+  await query(
+    `UPDATE ${TABLE} SET TargetTenantId = NULL, UpdatedAt = CURRENT_TIMESTAMP WHERE UserId = ? AND TargetTenantId = ?`,
+    [userId, targetTenantId]
+  );
+}
+//module.exports = { getSelection, setSourceTenant, setTargetTenant };
+module.exports = { getSelection, setSourceTenant, setTargetTenant, clearSourceIfSelected, clearTargetIfSelected };

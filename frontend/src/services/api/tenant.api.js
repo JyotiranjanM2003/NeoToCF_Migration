@@ -1,30 +1,3 @@
-// import client from './client';
-
-// export function getSourceStatus() {
-//   return client.get('/tenants/source').then((r) => r.data);
-// }
-
-// export function connectSource(payload) {
-//   return client.post('/tenants/source', payload).then((r) => r.data);
-// }
-
-// export function testSource() {
-//   return client.post('/tenants/source/test').then((r) => r.data);
-// }
-
-// export function getTargetStatus() {
-//   return client.get('/tenants/target').then((r) => r.data);
-// }
-
-// export function connectTarget(payload) {
-//   return client.post('/tenants/target', payload).then((r) => r.data);
-// }
-
-// export function testTarget() {
-//   return client.post('/tenants/target/test').then((r) => r.data);
-// }
-
-
 import client from './client';
 
 // ---------- Source (Neo) ----------
@@ -75,4 +48,12 @@ export function testTargetTenant(id) {
 
 export function selectTargetTenant(id) {
   return client.post(`/tenants/target/${id}/select`).then((r) => r.data);
+}
+
+export function deleteSourceTenant(id) {
+  return client.delete(`/tenants/source/${id}`).then((r) => r.data);
+}
+
+export function deleteTargetTenant(id) {
+  return client.delete(`/tenants/target/${id}`).then((r) => r.data);
 }
