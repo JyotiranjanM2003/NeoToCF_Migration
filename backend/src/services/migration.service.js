@@ -177,7 +177,103 @@ async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId,
   let succeeded = 0;
   let failed = 0;
 
-  for (const artifact of targetArtifacts) {
+  // for (const artifact of targetArtifacts) {
+  //   const migrationArtifactId = await MigrationArtifactModel.create({
+  //     migrationId,
+  //     artifactId: artifact.id,
+  //     artifactName: artifact.name,
+  //     artifactType: artifact.type,
+  //     version: artifact.version,
+  //   });
+
+  //   // try {
+  //   //   const uploadAction = await migrateOneArtifact({
+  //   //     migrationId,
+  //   //     migrationArtifactId,
+  //   //     artifact,
+  //   //     sourceTenant,
+  //   //     targetTenant,
+  //   //     packageId,
+  //   //     transformRules,
+  //   //     userId: user.userId,
+  //   //   });
+  //   //   const finalStatus =
+  //   //     uploadAction === 'SKIPPED' ? 'SKIPPED' : uploadAction === 'UPDATED' ? 'UPDATED' : 'MIGRATED';
+  //   //   await MigrationArtifactModel.setStatus(migrationArtifactId, finalStatus);
+  //   //   succeeded += 1;
+  //   // } catch (err) {
+  //     try {
+  //     await migrateOneArtifact({
+  //       migrationId,
+  //       migrationArtifactId,
+  //       artifact,
+  //       sourceTenant,
+  //       targetTenant,
+  //       packageId,
+  //       transformRules,
+  //     });
+  //     await MigrationArtifactModel.setStatus(migrationArtifactId, 'MIGRATED');
+  //     succeeded += 1;
+  //   } catch (err) {
+  //     await MigrationArtifactModel.setStatus(migrationArtifactId, 'FAILED', describeError(err));
+  //     failed += 1;
+  //   }
+  // }
+
+  const iflowArtifacts = targetArtifacts.filter((a) => a.type === 'IFLOW');
+  const otherArtifacts = targetArtifacts.filter((a) => a.type !== 'IFLOW');
+
+  // Value mappings, message mappings, and script collections don't have a
+  // reliable per-artifact create/update endpoint the way iFlows do, so they
+  // travel together as ONE whole-package import — done once for the whole
+  // group, not once per artifact (which would otherwise re-import the same
+  // package redundantly for every non-iFlow artifact it contains).
+  if (otherArtifacts.length > 0) {
+    const migrationArtifactIds = [];
+    for (const artifact of otherArtifacts) {
+      const id = await MigrationArtifactModel.create({
+        migrationId,
+        artifactId: artifact.id,
+        artifactName: artifact.name,
+        artifactType: artifact.type,
+        version: artifact.version,
+      });
+      migrationArtifactIds.push(id);
+    }
+
+    try {
+      await logStep(
+        migrationId,
+        STEPS.DOWNLOAD,
+        'STARTED',
+        `Package-level content for ${otherArtifacts.length} non-iFlow artifact(s)`
+      );
+      const zipBuffer = await packageService.downloadPackageZip(sourceTenant, packageId);
+      await logStep(migrationId, STEPS.DOWNLOAD, 'SUCCESS', 'Package content downloaded');
+
+      await logStep(migrationId, STEPS.UPLOAD, 'STARTED', 'Importing package on target');
+      await cfClient.write(targetTenant, 'post', '/IntegrationPackages', {
+        params: { Overwrite: true },
+        data: zipBuffer,
+        headers: { 'Content-Type': 'application/zip' },
+      });
+      await logStep(migrationId, STEPS.UPLOAD, 'SUCCESS', 'Package imported on target');
+
+      for (const id of migrationArtifactIds) {
+        await MigrationArtifactModel.setStatus(id, 'MIGRATED');
+      }
+      succeeded += migrationArtifactIds.length;
+    } catch (err) {
+      const detail = describeError(err);
+      await logStep(migrationId, STEPS.UPLOAD, 'ERROR', detail);
+      for (const id of migrationArtifactIds) {
+        await MigrationArtifactModel.setStatus(id, 'FAILED', detail);
+      }
+      failed += migrationArtifactIds.length;
+    }
+  }
+
+  for (const artifact of iflowArtifacts) {
     const migrationArtifactId = await MigrationArtifactModel.create({
       migrationId,
       artifactId: artifact.id,
@@ -186,23 +282,7 @@ async function runPipeline({ migrationId, sourceTenant, targetTenant, packageId,
       version: artifact.version,
     });
 
-    // try {
-    //   const uploadAction = await migrateOneArtifact({
-    //     migrationId,
-    //     migrationArtifactId,
-    //     artifact,
-    //     sourceTenant,
-    //     targetTenant,
-    //     packageId,
-    //     transformRules,
-    //     userId: user.userId,
-    //   });
-    //   const finalStatus =
-    //     uploadAction === 'SKIPPED' ? 'SKIPPED' : uploadAction === 'UPDATED' ? 'UPDATED' : 'MIGRATED';
-    //   await MigrationArtifactModel.setStatus(migrationArtifactId, finalStatus);
-    //   succeeded += 1;
-    // } catch (err) {
-      try {
+    try {
       await migrateOneArtifact({
         migrationId,
         migrationArtifactId,

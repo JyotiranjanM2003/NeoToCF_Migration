@@ -28,10 +28,58 @@ async function listPackages(sourceTenant) {
  * Lists every artifact inside a package, tagged by type, so the frontend
  * can show "IFLOW", "VALUE_MAPPING", etc. next to each row.
  */
+// async function listArtifacts(sourceTenant, packageId) {
+//   const [iflowsRes, valueMappingsRes] = await Promise.allSettled([
+//     neoClient.get(sourceTenant, `/IntegrationPackages('${packageId}')/IntegrationDesigntimeArtifacts`),
+//     neoClient.get(sourceTenant, `/IntegrationPackages('${packageId}')/ValueMappingDesigntimeArtifacts`),
+//   ]);
+
+//   const artifacts = [];
+
+//   if (iflowsRes.status === 'fulfilled') {
+//     for (const a of iflowsRes.value.d?.results || []) {
+//       artifacts.push({
+//         id: a.Id,
+//         name: a.Name,
+//         type: 'IFLOW',
+//         version: a.Version,
+//         status: mapArtifactStatus(a),
+//         packageId,
+//       });
+//     }
+//   }
+
+//   if (valueMappingsRes.status === 'fulfilled') {
+//     for (const a of valueMappingsRes.value.d?.results || []) {
+//       artifacts.push({
+//         id: a.Id,
+//         name: a.Name,
+//         type: 'VALUE_MAPPING',
+//         version: a.Version,
+//         status: 'Active',
+//         packageId,
+//       });
+//     }
+//   }
+
+//   return artifacts;
+// }
+
+/**
+ * Lists every artifact inside a package, tagged by type, so the frontend
+ * can show "IFLOW", "VALUE_MAPPING", "MESSAGE_MAPPING", "SCRIPT_COLLECTION"
+ * next to each row. Each artifact type lives under its own CPI OData entity
+ * set (IntegrationDesigntimeArtifacts, ValueMappingDesigntimeArtifacts,
+ * MessageMappingDesigntimeArtifacts, ScriptCollectionDesigntimeArtifacts) —
+ * missing any of these out means artifacts of that type silently vanish
+ * from the list even though they're really in the package.
+ */
 async function listArtifacts(sourceTenant, packageId) {
-  const [iflowsRes, valueMappingsRes] = await Promise.allSettled([
+  const [iflowsRes, valueMappingsRes, messageMappingsRes, scriptCollectionsRes] = await Promise.allSettled([
     neoClient.get(sourceTenant, `/IntegrationPackages('${packageId}')/IntegrationDesigntimeArtifacts`),
     neoClient.get(sourceTenant, `/IntegrationPackages('${packageId}')/ValueMappingDesigntimeArtifacts`),
+    neoClient.get(sourceTenant, `/IntegrationPackages('${packageId}')/MessageMappingDesigntimeArtifacts`),
+    neoClient.get(sourceTenant, `/IntegrationPackages('${packageId}')/ScriptCollectionDesigntimeArtifacts`),
   ]);
 
   const artifacts = [];
@@ -57,6 +105,32 @@ async function listArtifacts(sourceTenant, packageId) {
         type: 'VALUE_MAPPING',
         version: a.Version,
         status: 'Active',
+        packageId,
+      });
+    }
+  }
+
+  if (messageMappingsRes.status === 'fulfilled') {
+    for (const a of messageMappingsRes.value.d?.results || []) {
+      artifacts.push({
+        id: a.Id,
+        name: a.Name,
+        type: 'MESSAGE_MAPPING',
+        version: a.Version,
+        status: mapArtifactStatus(a),
+        packageId,
+      });
+    }
+  }
+
+  if (scriptCollectionsRes.status === 'fulfilled') {
+    for (const a of scriptCollectionsRes.value.d?.results || []) {
+      artifacts.push({
+        id: a.Id,
+        name: a.Name,
+        type: 'SCRIPT_COLLECTION',
+        version: a.Version,
+        status: mapArtifactStatus(a),
         packageId,
       });
     }

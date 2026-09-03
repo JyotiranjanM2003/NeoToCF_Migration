@@ -30,7 +30,7 @@ export default function ArtifactList({ artifacts, packageId }) {
               style={{ borderTop: '1px solid var(--border)', cursor: 'pointer' }}
             >
               <td style={tdStyle}>
-                <EntityIcon type={a.type === 'IFLOW' ? 'iflow' : 'package'} />
+                <EntityIcon type={a.type} />
               </td>
               <td style={tdStyle}>
                 <div style={{ fontWeight: 600 }}>{a.name}</div>
