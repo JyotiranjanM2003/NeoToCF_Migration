@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', enabled: true },
   { to: '/packages', label: 'Packages', enabled: true },
   { to: '/datastores', label: 'Data Stores', enabled: false },
-  { to: '/variables', label: 'Variables', enabled: false },
+  { to: '/variables', label: 'Variables', enabled: true },
   { to: '/security', label: 'Security Materials', enabled: false },
 ];
 
