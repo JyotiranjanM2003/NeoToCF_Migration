@@ -13,6 +13,7 @@ import MigrationReport from './pages/MigrationReport.jsx';
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx';
 import BatchMigrationReport from './pages/BatchMigrationReport.jsx';
 import Variables from './pages/Variables.jsx';
+import SecurityMaterials from './pages/SecurityMaterials.jsx';
 export default function App() {
   return (
     <Routes>
@@ -40,6 +41,7 @@ export default function App() {
       {/* <Route path="/transform-rules" element={<ProtectedRoute><TransformRules /></ProtectedRoute>} /> */}
       
       <Route path="/variables" element={<ProtectedRoute><Variables /></ProtectedRoute>} />
+      <Route path="/number-ranges" element={<ProtectedRoute><SecurityMaterials /></ProtectedRoute>} />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

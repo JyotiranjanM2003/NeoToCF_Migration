@@ -17,7 +17,11 @@ export default function Login() {
       await login(form);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      setError(
+        err.response?.status === 429
+          ? 'Too many login attempts. Please wait a few minutes and try again.'
+          : err.response?.data?.message || 'Login failed. Confirm the backend is running and try again.'
+      );
     } finally {
       setSubmitting(false);
     }

@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/datastores', label: 'Data Stores', enabled: false },
   { to: '/variables', label: 'Variables', enabled: true },
   { to: '/security', label: 'Security Materials', enabled: false },
+  { to: '/number-ranges', label: 'Number Ranges', enabled: true },
 ];
 
 export default function AppShell({ children }) {

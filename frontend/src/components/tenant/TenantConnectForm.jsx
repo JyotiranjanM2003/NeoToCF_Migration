@@ -14,7 +14,16 @@ export default function TenantConnectForm({ fields, initialValues = {}, onSubmit
 
   function handleSubmit(e) {
     e.preventDefault();
-    onSubmit(values);
+    const normalizedValues = { ...values };
+    for (const field of ['host', 'tokenHost']) {
+      if (normalizedValues[field]) {
+        normalizedValues[field] = normalizedValues[field]
+          .trim()
+          .replace(/^https?:\/\//i, '')
+          .replace(/\/$/, '');
+      }
+    }
+    onSubmit(normalizedValues);
   }
 
   return (
