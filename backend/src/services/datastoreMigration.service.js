@@ -24,6 +24,7 @@ const encrypt = require('../utils/encrypt');
 const MigrationModel = require('../models/Migration.model');
 const MigrationArtifactModel = require('../models/MigrationArtifact.model');
 const MigrationLogModel = require('../models/MigrationLog.model');
+const DataStoreOperationModel = require('../models/DataStoreOperation.model');
 
 const {
   HELPER_IFLOW_BASE64,
@@ -103,6 +104,49 @@ async function lookupSourceDataStore(sourceTenant, dataStoreName, integrationFlo
     if (err.response?.status === 404) return null;
     throw err;
   }
+}
+
+/**
+ * Checks a proposed migration batch against migration history and returns
+ * the subset that were already successfully migrated to this exact target
+ * tenant before. Empty array = no duplicates, safe to proceed.
+ *
+ * @param {object} params
+ * @param {object} params.user
+ * @param {object} params.sourceTenant
+ * @param {object} params.targetTenant
+ * @param {Array}  params.dataStores - [] means "all data stores on source"
+ * @returns {Promise<Array<{ dataStoreName, integrationFlow, lastMigratedAt }>>}
+ */
+async function checkDuplicates({ user, sourceTenant, targetTenant, dataStores = [] }) {
+  let candidates = dataStores;
+
+  if (candidates.length === 0) {
+    const all = await listSourceDataStores(sourceTenant);
+    candidates = all.map((d) => ({
+      dataStoreName: d.dataStoreName,
+      integrationFlow: d.integrationFlow,
+    }));
+  }
+
+  const duplicates = [];
+  for (const ds of candidates) {
+    const prev = await DataStoreOperationModel.findLatestSuccess(
+      user.userId,
+      targetTenant.TARGETTENANTID,
+      ds.dataStoreName,
+      ds.integrationFlow || ''
+    );
+    if (prev) {
+      duplicates.push({
+        dataStoreName: ds.dataStoreName,
+        integrationFlow: ds.integrationFlow || '',
+        lastMigratedAt: prev.COMPLETEDAT || prev.CompletedAt,
+      });
+    }
+  }
+
+  return duplicates;
 }
 
 /**
@@ -201,6 +245,21 @@ async function runPipeline({ migrationId, user, sourceTenant, targetTenant, data
       version: '1.0',
     });
 
+    // Dedicated operation-history row for this data store
+    const opId = await DataStoreOperationModel.create({
+      migrationId,
+      migrationArtifactId: artifactId,
+      userId: user.userId,
+      sourceTenantId: sourceTenant.SOURCETENANTID,
+      targetTenantId: targetTenant.TARGETTENANTID,
+      dataStoreName: ds.dataStoreName,
+      integrationFlow: ds.integrationFlow,
+      dataStoreType: ds.type || '',
+      entryId: ds.entryId || '',
+      helperFlowId: flowName,
+    });
+    await DataStoreOperationModel.markRunning(opId);
+
     try {
       await migrateOneDataStore({
         migrationId,
@@ -215,9 +274,11 @@ async function runPipeline({ migrationId, user, sourceTenant, targetTenant, data
         targetTenant,
       });
       await MigrationArtifactModel.setStatus(artifactId, 'MIGRATED');
+      await DataStoreOperationModel.complete(opId, 'SUCCESS');
       succeeded += 1;
     } catch (err) {
       await MigrationArtifactModel.setStatus(artifactId, 'FAILED', describeError(err));
+      await DataStoreOperationModel.complete(opId, 'FAILED', describeError(err));
       failed += 1;
     }
   }
@@ -545,5 +606,6 @@ function describeError(err) {
 module.exports = {
   listSourceDataStores,
   lookupSourceDataStore,
+  checkDuplicates,
   start,
 };

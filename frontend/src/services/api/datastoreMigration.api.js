@@ -26,8 +26,11 @@ export function lookupDataStore(dataStoreName, integrationFlow = '', type = '') 
  * Starts a data store migration.
  * @param {Array<{ dataStoreName: string, integrationFlow: string, type?: string, entryId?: string }>} dataStores
  *   Pass an empty array to migrate ALL data stores.
+ * @param {boolean} force - true skips the duplicate-migration check server-side
  * @returns {{ migrationId: string, status: 'RUNNING' }}
+ *   Throws with response.status === 409 and response.data.code === 'DUPLICATE_DATASTORES'
+ *   when duplicates are found and force was not set.
  */
-export function startDataStoreMigration(dataStores = []) {
-  return client.post('/datastores/migrate', { dataStores }).then((r) => r.data);
+export function startDataStoreMigration(dataStores = [], force = false) {
+  return client.post('/datastores/migrate', { dataStores, force }).then((r) => r.data);
 }

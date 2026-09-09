@@ -32,6 +32,10 @@ export default function DataStores() {
   const [starting, setStarting] = useState(false);
   const pollRef = useRef(null);
 
+  // ── Duplicate-migration warning popup ─────────────────────────────────────
+  // { duplicates: [{ dataStoreName, integrationFlow, lastMigratedAt }], pendingStores: [...] }
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
+
   // ── Load data stores on mount ─────────────────────────────────────────────
   useEffect(() => {
     datastoreApi
@@ -124,20 +128,41 @@ export default function DataStores() {
   const allVisibleSelected =
     visibleDataStores.length > 0 && visibleDataStores.every((d) => selectedKeys.has(dsKey(d)));
 
-  // ── Migration launchers ───────────────────────────────────────────────────
-  async function handleMigrateSelected() {
+  // ── Shared migration launcher (handles the duplicate-check popup) ────────
+  async function launchMigration(storesPayload) {
     setStarting(true);
     setMigError('');
     setMigStatus(null);
     setMigReport(null);
-
-    const stores = Array.from(selectedKeys).map((k) => {
-      const [dataStoreName, integrationFlow, type] = k.split('::');
-      return { dataStoreName, integrationFlow, type };
-    });
+    setDuplicateWarning(null);
 
     try {
-      const { migrationId: id } = await datastoreApi.startDataStoreMigration(stores);
+      const { migrationId: id } = await datastoreApi.startDataStoreMigration(storesPayload, false);
+      setMigrationId(id);
+    } catch (err) {
+      if (err.response?.status === 409 && err.response.data?.code === 'DUPLICATE_DATASTORES') {
+        setStarting(false);
+        setDuplicateWarning({
+          duplicates: err.response.data.duplicates,
+          pendingStores: storesPayload,
+        });
+        return;
+      }
+      setMigError(err.response?.data?.message || 'Failed to start migration');
+      setStarting(false);
+    }
+  }
+
+  async function confirmForcedMigration() {
+    if (!duplicateWarning) return;
+    const { pendingStores } = duplicateWarning;
+    setDuplicateWarning(null);
+    setStarting(true);
+    setMigError('');
+    setMigStatus(null);
+    setMigReport(null);
+    try {
+      const { migrationId: id } = await datastoreApi.startDataStoreMigration(pendingStores, true);
       setMigrationId(id);
     } catch (err) {
       setMigError(err.response?.data?.message || 'Failed to start migration');
@@ -145,18 +170,17 @@ export default function DataStores() {
     }
   }
 
+  // ── Migration launchers ───────────────────────────────────────────────────
+  async function handleMigrateSelected() {
+    const stores = Array.from(selectedKeys).map((k) => {
+      const [dataStoreName, integrationFlow, type] = k.split('::');
+      return { dataStoreName, integrationFlow, type };
+    });
+    await launchMigration(stores);
+  }
+
   async function handleMigrateAll() {
-    setStarting(true);
-    setMigError('');
-    setMigStatus(null);
-    setMigReport(null);
-    try {
-      const { migrationId: id } = await datastoreApi.startDataStoreMigration([]);
-      setMigrationId(id);
-    } catch (err) {
-      setMigError(err.response?.data?.message || 'Failed to start migration');
-      setStarting(false);
-    }
+    await launchMigration([]);
   }
 
   async function handleMigrateSpecific() {
@@ -165,32 +189,22 @@ export default function DataStores() {
       return;
     }
     setLookupError('');
-    setStarting(true);
-    setMigError('');
-    setMigStatus(null);
-    setMigReport(null);
 
     try {
       // Validate first (also previews retention settings)
       await datastoreApi.lookupDataStore(specificName.trim(), specificFlow.trim());
-      const { migrationId: id } = await datastoreApi.startDataStoreMigration([
-        {
-          dataStoreName: specificName.trim(),
-          integrationFlow: specificFlow.trim(),
-          entryId: specificEntryId.trim(),
-        },
-      ]);
-      setMigrationId(id);
     } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to start migration';
-      if (err.response?.status === 404 || err.response?.status === 400) {
-        setLookupError(msg);
-        setStarting(false);
-      } else {
-        setMigError(msg);
-        setStarting(false);
-      }
+      setLookupError(err.response?.data?.message || 'Data store not found on source');
+      return;
     }
+
+    await launchMigration([
+      {
+        dataStoreName: specificName.trim(),
+        integrationFlow: specificFlow.trim(),
+        entryId: specificEntryId.trim(),
+      },
+    ]);
   }
 
   const migRunning = migStatus && !TERMINAL_STATUSES.includes(migStatus.migration?.STATUS);
@@ -351,7 +365,7 @@ export default function DataStores() {
         <>
           <h3 style={{ marginBottom: 8 }}>Migration Log</h3>
           <MigrationLogViewer logs={migReport.logs} />
-                    <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12 }}>
             <a
               href={`/migrations/${migrationId}`}
               style={{ fontSize: 13, color: 'var(--accent)' }}
@@ -360,13 +374,39 @@ export default function DataStores() {
             </a>
           </div>
         </>
-             )}
-       
-             {migRunning && (
-               <p className="helper-text" style={{ marginTop: 12 }}>
-                 Migration in progress — this page updates automatically.
-               </p>
-             )}
-           </AppShell>
-         );
-       }
+      )}
+
+      {migRunning && (
+        <p className="helper-text" style={{ marginTop: 12 }}>
+          Migration in progress — this page updates automatically.
+        </p>
+      )}
+
+      {/* ── Duplicate-migration warning popup ────────────────────────────── */}
+      {duplicateWarning && (
+  <div
+    style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+    }}
+  >
+    <div className="card" style={{ maxWidth: 340, width: '90%', padding: 20, textAlign: 'center' }}>
+      <p style={{ fontSize: 14, margin: '0 0 16px 0' }}>
+        {duplicateWarning.duplicates.length === 1
+          ? `"${duplicateWarning.duplicates[0].dataStoreName}" is already migrated.`
+          : `${duplicateWarning.duplicates.length} selected data stores are already migrated.`}
+      </p>
+      <button className="btn" onClick={() => setDuplicateWarning(null)}>
+        OK
+      </button>
+    </div>
+  </div>
+)}
+    </AppShell>
+  );
+}

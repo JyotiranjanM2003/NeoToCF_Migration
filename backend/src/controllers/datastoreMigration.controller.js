@@ -76,16 +76,21 @@ async function lookup(req, res, next) {
 
 /**
  * POST /api/datastores/migrate
- * Body: { dataStores?: [{ dataStoreName, integrationFlow, type?, entryId? }] }
+ * Body: {
+ *   dataStores?: [{ dataStoreName, integrationFlow, type?, entryId? }],
+ *   force?: boolean   // when true, skips the duplicate-migration check
+ * }
  *   - dataStores omitted or [] → migrate ALL data stores
  *   - dataStores with entries → selective migration (optionally one entry only)
  *
- * Returns: { migrationId, status: 'RUNNING' }
- * The caller polls GET /api/migration/:migrationId/status (existing endpoint).
+ * Returns:
+ *   202 { migrationId, status: 'RUNNING' }                       — started
+ *   409 { code: 'DUPLICATE_DATASTORES', duplicates: [...] }      — blocked, needs confirmation (force:true to bypass)
+ * The caller polls GET /api/migration/:migrationId/status (existing endpoint) once started.
  */
 async function migrateStart(req, res, next) {
   try {
-    const { dataStores = [] } = req.body;
+    const { dataStores = [], force = false } = req.body;
 
     if (!Array.isArray(dataStores)) {
       return res.status(400).json({ message: 'dataStores must be an array' });
@@ -102,6 +107,22 @@ async function migrateStart(req, res, next) {
         code: 'NO_TENANTS_SELECTED',
         message: 'Select both a source and a target tenant first',
       });
+    }
+
+    if (!force) {
+      const duplicates = await datastoreMigrationService.checkDuplicates({
+        user: req.user,
+        sourceTenant,
+        targetTenant,
+        dataStores,
+      });
+      if (duplicates.length > 0) {
+        return res.status(409).json({
+          code: 'DUPLICATE_DATASTORES',
+          message: `${duplicates.length} data store(s) were already migrated to this target tenant`,
+          duplicates,
+        });
+      }
     }
 
     const migrationId = await datastoreMigrationService.start({
