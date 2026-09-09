@@ -29,6 +29,7 @@ router.get('/batch/:batchId/report', migrationController.getBatchReport);
 
 router.post('/start', migrationController.start);
 router.get('/', migrationController.list);
+router.get('/active', migrationController.getActiveMigration);
 router.get('/:id/status', migrationController.getStatus);
 router.get('/:id/report', migrationController.getReport);
 

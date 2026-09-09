@@ -50,3 +50,7 @@ export function getBatchStatus(batchId) {
 export function getBatchReport(batchId) {
   return client.get(`/migration/batch/${batchId}/report`).then((r) => r.data);
 }
+
+export function getActiveMigration() {
+  return client.get('/migration/active').then((r) => r.data);
+}

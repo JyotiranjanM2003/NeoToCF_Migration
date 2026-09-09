@@ -72,4 +72,18 @@ async function deleteById(migrationId) {
   await query(`DELETE FROM ${TABLE} WHERE MigrationId = ?`, [migrationId]);
 }
 
-module.exports = { create, setStatus, findById, listForUser, listForBatch, latestStatusByPackageForUser, listBySourceTenant, listByTargetTenant, deleteById};
+/**
+ * Most recent STANDALONE (non-batch) RUNNING migration for this user —
+ * backs the "continue watching migration" prompt on the Packages page for
+ * a migration started via "Migrate whole package" or a single-iFlow
+ * "Migrate" button, as opposed to a batch (see MigrationBatch.model.js's
+ * findActiveForUser for that case).
+ */
+async function findActiveForUser(userId) {
+  const rows = await query(
+    `SELECT TOP 1 * FROM ${TABLE} WHERE UserId = ? AND Status = 'RUNNING' AND BatchId IS NULL ORDER BY StartedAt DESC`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+module.exports = { create, setStatus, findById, listForUser, listForBatch, latestStatusByPackageForUser, listBySourceTenant, listByTargetTenant, deleteById, findActiveForUser };
