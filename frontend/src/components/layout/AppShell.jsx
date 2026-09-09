@@ -14,7 +14,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', enabled: true },
   { to: '/packages', label: 'Packages', enabled: true },
-  { to: '/datastores', label: 'Data Stores', enabled: false },
+  { to: '/datastores', label: 'Data Stores', enabled: true },
   { to: '/variables', label: 'Variables', enabled: true },
   { to: '/security', label: 'Security Materials', enabled: false },
 ];
