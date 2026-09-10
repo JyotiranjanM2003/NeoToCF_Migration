@@ -260,6 +260,17 @@ async function list(req, res, next) {
   }
 }
 
+
+/** GET /api/migration/active — the current user's in-progress standalone (non-batch) migration, if any. */
+async function getActiveMigration(req, res, next) {
+  try {
+    const migration = await MigrationModel.findActiveForUser(req.user.userId);
+    res.json({ migration });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   start,
   startBatch,
@@ -269,4 +280,5 @@ module.exports = {
   getStatus,
   getReport,
   list,
+  getActiveMigration
 };

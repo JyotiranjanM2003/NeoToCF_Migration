@@ -13,6 +13,7 @@ export default function Packages() {
   const [starting, setStarting] = useState(false);
   const [activeBatch, setActiveBatch] = useState(null);
   const [search, setSearch] = useState('');
+  const [activeMigration, setActiveMigration] = useState(null);
 
   useEffect(() => {
     packageApi
@@ -31,6 +32,10 @@ export default function Packages() {
       .getActiveBatch()
       .then((data) => setActiveBatch(data.batch))
       .catch(() => {});
+      migrationApi
+  .getActiveMigration()
+  .then((data) => setActiveMigration(data.migration))
+  .catch(() => {});
   }, []);
 
   function toggleSelect(packageId) {
@@ -144,6 +149,31 @@ export default function Packages() {
           </button>
         </div>
       )}
+
+      {activeMigration && (
+  <div
+    className="card"
+    style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+      borderColor: 'var(--accent)',
+    }}
+  >
+    <div>
+      <strong>A migration of "{activeMigration.PACKAGENAME}" is still running.</strong>
+      <div className="helper-text">Started {new Date(activeMigration.STARTEDAT).toLocaleString()}</div>
+    </div>
+    <button
+      className="btn btn-primary"
+      style={{ width: 'auto' }}
+      onClick={() => navigate(`/migrations/${activeMigration.MIGRATIONID}`)}
+    >
+      Continue watching migration
+    </button>
+  </div>
+)}
 
       {error && (
         <div className="error-banner">
