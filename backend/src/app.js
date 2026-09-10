@@ -32,7 +32,10 @@ app.use('/api/migration', require('./routes/migration.routes'));
 app.use('/api/transform-rules', require('./routes/transformRule.routes'));
 
 app.use('/api/variables', require('./routes/variableMigration.routes'));
+
 app.use('/api/datastores', require('./routes/datastoreMigration.routes'));
+
+app.use('/api/number-ranges', require('./routes/numberRange.routes'));
 // Phase 3+ (Data Stores, Variables, Custom Tags, Number Ranges, Access
 // Policies, Security Artifacts, Value Mapping Values) mount here, following
 // the same service/controller/route pattern as packages & iflows above.

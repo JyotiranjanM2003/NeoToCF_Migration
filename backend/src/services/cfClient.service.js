@@ -8,6 +8,7 @@ const axios = require('axios');
 const tokenCache = require('./tokenCache.service');
 const encrypt = require('../utils/encrypt');
 const logger = require('../utils/logger');
+const { normalizeTenantHost } = require('../utils/tenantHost');
 
 /**
  * POST https://{targetTokenHost}/oauth/token?grant_type=client_credentials
@@ -15,7 +16,7 @@ const logger = require('../utils/logger');
  */
 async function fetchOAuthToken(tenant) {
   const clientSecret = encrypt.decrypt(tenant.OAUTHCLIENTSECRETENC);
-  const url = `https://${tenant.TOKENHOST}/oauth/token`;
+  const url = `https://${normalizeTenantHost(tenant.TOKENHOST)}/oauth/token`;
 
   const res = await axios.post(url, null, {
     params: { grant_type: 'client_credentials' },
@@ -30,7 +31,7 @@ async function fetchOAuthToken(tenant) {
 
 /** GET https://{targetHost}/api/v1/  with header X-CSRF-Token: Fetch */
 async function fetchXsrfToken(tenant, accessToken) {
-  const url = `https://${tenant.HOST}/api/v1/`;
+  const url = `https://${normalizeTenantHost(tenant.HOST)}/api/v1/`;
   const res = await axios.get(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -72,7 +73,7 @@ async function testConnection(tenant) {
 /** Generic authenticated GET against the target CPI OData API. */
 async function get(tenant, path, params = {}) {
   const session = await ensureSession(tenant);
-  const res = await axios.get(`https://${tenant.HOST}/api/v1${path}`, {
+  const res = await axios.get(`https://${normalizeTenantHost(tenant.HOST)}/api/v1${path}`, {
     params,
     headers: {
       Authorization: `Bearer ${session.accessToken}`,
@@ -91,7 +92,7 @@ async function write(tenant, method, path, { params = {}, data, headers = {} } =
   const session = await ensureSession(tenant);
   const res = await axios({
     method,
-    url: `https://${tenant.HOST}/api/v1${path}`,
+    url: `https://${normalizeTenantHost(tenant.HOST)}/api/v1${path}`,
     params,
     data,
     headers: {

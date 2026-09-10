@@ -457,3 +457,65 @@ a:focus-visible {
   height: 15px;
   vertical-align: middle;
 }
+
+/* ---------- number ranges ---------- */
+.number-range-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+}
+
+/* Override the shared four-column sizing rules only for this eight-column table. */
+.table.number-range-table {
+  min-width: 1080px;
+  table-layout: fixed;
+}
+
+.number-range-table th,
+.number-range-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.number-range-table th:nth-child(n),
+.number-range-table td:nth-child(n) {
+  width: auto;
+}
+
+.number-range-table th:first-child,
+.number-range-table td:first-child {
+  width: auto;
+}
+
+.number-range-select-column { width: 44px; }
+.number-range-name-column { width: 180px; }
+.number-range-description-column { width: 250px; }
+.number-range-value-column { width: 118px; }
+.number-range-rotate-column { width: 90px; }
+.number-range-length-column { width: 110px; }
+
+.number-range-results-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.number-range-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.number-range-result-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.number-range-result-status.migrated { color: var(--accent-strong); }
+.number-range-result-status.already_exists { color: var(--warn); }
+.number-range-result-status.failed { color: var(--danger); }

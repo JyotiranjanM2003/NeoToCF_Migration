@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import MigrationProgress from '../components/migration/MigrationProgress.jsx';
 import MigrationLogViewer from '../components/migration/MigrationLogViewer.jsx';
@@ -10,8 +9,6 @@ const TERMINAL_STATUSES = ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'];
 const POLL_INTERVAL_MS = 2500;
 
 export default function Variables() {
-  const navigate = useNavigate();
-
   // ── Variable list state ───────────────────────────────────────────────────
   const [variables, setVariables] = useState(null);
   const [loadError, setLoadError] = useState('');
@@ -39,10 +36,7 @@ export default function Variables() {
       .catch((err) => {
         const code = err.response?.data?.code;
         if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
-          navigate('/dashboard', {
-            replace: true,
-            state: { notice: err.response.data.message || 'Select a source tenant first.' },
-          });
+          setLoadError(err.response?.data?.message || 'Select a source tenant first to load variables.');
           return;
         }
         setLoadError(err.response?.data?.message || 'Failed to load variables');

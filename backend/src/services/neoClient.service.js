@@ -6,6 +6,7 @@ const axios = require('axios');
 const tokenCache = require('./tokenCache.service');
 const encrypt = require('../utils/encrypt');
 const logger = require('../utils/logger');
+const { normalizeTenantHost } = require('../utils/tenantHost');
 
 /**
  * POST https://{sourceTokenHost}/oauth2/api/v1/token?grant_type=client_credentials
@@ -13,7 +14,7 @@ const logger = require('../utils/logger');
  */
 async function fetchOAuthToken(tenant) {
   const clientSecret = encrypt.decrypt(tenant.OAUTHCLIENTSECRETENC);
-  const url = `https://${tenant.TOKENHOST}/oauth2/api/v1/token`;
+  const url = `https://${normalizeTenantHost(tenant.TOKENHOST)}/oauth2/api/v1/token`;
 
   const res = await axios.post(url, null, {
     params: { grant_type: 'client_credentials' },
@@ -31,7 +32,7 @@ async function fetchOAuthToken(tenant) {
  * Returns the XSRF token + session cookie needed for POST/DELETE calls.
  */
 async function fetchXsrfToken(tenant, accessToken) {
-  const url = `https://${tenant.HOST}/api/v1/`;
+  const url = `https://${normalizeTenantHost(tenant.HOST)}/api/v1/`;
   const res = await axios.get(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -77,7 +78,7 @@ async function testConnection(tenant) {
 /** Generic authenticated GET against the source CPI OData API. */
 async function get(tenant, path, params = {}) {
   const session = await ensureSession(tenant);
-  const res = await axios.get(`https://${tenant.HOST}/api/v1${path}`, {
+  const res = await axios.get(`https://${normalizeTenantHost(tenant.HOST)}/api/v1${path}`, {
     params,
     headers: {
       Authorization: `Bearer ${session.accessToken}`,
@@ -90,7 +91,7 @@ async function get(tenant, path, params = {}) {
 /** Generic authenticated GET that returns a binary body (zip downloads). */
 async function getBinary(tenant, path, params = {}) {
   const session = await ensureSession(tenant);
-  const res = await axios.get(`https://${tenant.HOST}/api/v1${path}`, {
+  const res = await axios.get(`https://${normalizeTenantHost(tenant.HOST)}/api/v1${path}`, {
     params,
     responseType: 'arraybuffer',
     headers: {

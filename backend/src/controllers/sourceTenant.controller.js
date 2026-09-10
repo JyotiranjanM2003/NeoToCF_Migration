@@ -104,6 +104,7 @@ const neoClient = require('../services/neoClient.service');
 const tokenCache = require('../services/tokenCache.service');
 const encrypt = require('../utils/encrypt');
 const tenantDeletionService = require('../services/tenantDeletion.service');
+const { normalizeTenantHost } = require('../utils/tenantHost');
 
 /** GET /api/tenants/source — list every Neo tenant this user has added. */
 async function list(req, res, next) {
@@ -163,13 +164,15 @@ async function create(req, res, next) {
       });
     }
 
+    const normalizedHost = normalizeTenantHost(host);
+    const normalizedTokenHost = normalizeTenantHost(tokenHost);
     const oauthClientSecretEnc = encrypt.encrypt(oauthClientSecret);
 
     const sourceTenantId = await SourceTenantModel.create({
       userId: req.user.userId,
       tenantName,
-      host,
-      tokenHost,
+      host: normalizedHost,
+      tokenHost: normalizedTokenHost,
       oauthClientId,
       oauthClientSecretEnc,
       srcDomain,
@@ -201,12 +204,14 @@ async function update(req, res, next) {
     const existing = await SourceTenantModel.findById(req.params.id, req.user.userId);
     if (!existing) return res.status(404).json({ message: 'Source tenant not found' });
 
+    const normalizedHost = normalizeTenantHost(host);
+    const normalizedTokenHost = normalizeTenantHost(tokenHost);
     const oauthClientSecretEnc = encrypt.encrypt(oauthClientSecret);
 
     await SourceTenantModel.update(req.params.id, req.user.userId, {
       tenantName,
-      host,
-      tokenHost,
+      host: normalizedHost,
+      tokenHost: normalizedTokenHost,
       oauthClientId,
       oauthClientSecretEnc,
       srcDomain,

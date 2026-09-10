@@ -21,10 +21,7 @@ export default function Packages() {
       .catch((err) => {
         const code = err.response?.data?.code;
         if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
-          navigate('/dashboard', {
-            replace: true,
-            state: { notice: err.response.data.message || 'Select a source tenant to browse packages.' },
-          });
+          setError(err.response?.data?.message || 'Select a source tenant to browse packages.');
           return;
         }
         setError(err.response?.data?.message || 'Failed to load packages');
