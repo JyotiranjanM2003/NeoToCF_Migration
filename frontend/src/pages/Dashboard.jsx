@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import TenantListCard from '../components/tenant/TenantListCard.jsx';
 import * as tenantApi from '../services/api/tenant.api';
+import { invalidateAll } from '../utils/resourceCache.js';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -34,6 +35,7 @@ export default function Dashboard() {
     setError('');
     try {
       await tenantApi.selectSourceTenant(id);
+      invalidateAll(); // source changed → all cached lists are from the wrong tenant
       await loadTenants();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to select tenant');
@@ -47,6 +49,7 @@ export default function Dashboard() {
     setError('');
     try {
       await tenantApi.selectTargetTenant(id);
+      invalidateAll(); // target changed → migration status columns are now stale
       await loadTenants();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to select tenant');
@@ -62,6 +65,7 @@ async function handleDeleteSource(id) {
   setError('');
   try {
     await tenantApi.deleteSourceTenant(id);
+    invalidateAll();
     await loadTenants();
   } catch (err) {
     setError(err.response?.data?.message || 'Failed to delete tenant');
@@ -75,6 +79,7 @@ async function handleDeleteTarget(id) {
   setError('');
   try {
     await tenantApi.deleteTargetTenant(id);
+    invalidateAll();
     await loadTenants();
   } catch (err) {
     setError(err.response?.data?.message || 'Failed to delete tenant');

@@ -3,8 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import MigrationProgress from '../components/migration/MigrationProgress.jsx';
 import MigrationLogViewer from '../components/migration/MigrationLogViewer.jsx';
+import TableSkeleton from '../components/common/TableSkeleton.jsx';
+import useDebouncedValue from '../hooks/useDebouncedValue.js';
+import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as datastoreApi from '../services/api/datastoreMigration.api';
 import * as migrationApi from '../services/api/migration.api';
+
+const DS_CACHE_KEY = 'datastores';
+const DS_CACHE_TTL = 3 * 60 * 1000;
 
 const TERMINAL_STATUSES = ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'];
 const POLL_INTERVAL_MS = 2500;
@@ -13,10 +19,12 @@ export default function DataStores() {
   const navigate = useNavigate();
 
   // ── Data store list state ─────────────────────────────────────────────────
-  const [dataStores, setDataStores] = useState(null);
+  const [dataStores, setDataStores] = useState(() => getCache(DS_CACHE_KEY) ?? null);
   const [loadError, setLoadError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedKeys, setSelectedKeys] = useState(() => new Set()); // "name::flow::type"
+  const debouncedSearch = useDebouncedValue(search, 180);
 
   // ── Specific-data-store lookup form ───────────────────────────────────────
   const [specificName, setSpecificName] = useState('');
@@ -36,11 +44,20 @@ export default function DataStores() {
   // { duplicates: [{ dataStoreName, integrationFlow, lastMigratedAt }], pendingStores: [...] }
   const [duplicateWarning, setDuplicateWarning] = useState(null);
 
-  // ── Load data stores on mount ─────────────────────────────────────────────
-  useEffect(() => {
+  // ── Load data stores (cache-first) ────────────────────────────────────────
+  function loadDataStores(force = false) {
+    if (!force) {
+      const cached = getCache(DS_CACHE_KEY);
+      if (cached) { setDataStores(cached); return; }
+    }
+    setRefreshing(true);
+    setLoadError('');
     datastoreApi
       .listDataStores()
-      .then((data) => setDataStores(data.dataStores))
+      .then((data) => {
+        setDataStores(data.dataStores);
+        setCache(DS_CACHE_KEY, data.dataStores, DS_CACHE_TTL);
+      })
       .catch((err) => {
         const code = err.response?.data?.code;
         if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
@@ -51,7 +68,13 @@ export default function DataStores() {
           return;
         }
         setLoadError(err.response?.data?.message || 'Failed to load data stores');
-      });
+      })
+      .finally(() => setRefreshing(false));
+  }
+
+  useEffect(() => {
+    if (!getCache(DS_CACHE_KEY)) loadDataStores(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── MPL polling for an active migration ──────────────────────────────────
@@ -122,7 +145,7 @@ export default function DataStores() {
   }
 
   const visibleDataStores = (dataStores || []).filter((d) =>
-    d.dataStoreName.toLowerCase().includes(search.trim().toLowerCase())
+    d.dataStoreName.toLowerCase().includes(debouncedSearch.trim().toLowerCase())
   );
 
   const allVisibleSelected =
@@ -138,6 +161,7 @@ export default function DataStores() {
 
     try {
       const { migrationId: id } = await datastoreApi.startDataStoreMigration(storesPayload, false);
+      invalidateCache(DS_CACHE_KEY);
       setMigrationId(id);
     } catch (err) {
       if (err.response?.status === 409 && err.response.data?.code === 'DUPLICATE_DATASTORES') {
@@ -163,6 +187,7 @@ export default function DataStores() {
     setMigReport(null);
     try {
       const { migrationId: id } = await datastoreApi.startDataStoreMigration(pendingStores, true);
+      invalidateCache(DS_CACHE_KEY);
       setMigrationId(id);
     } catch (err) {
       setMigError(err.response?.data?.message || 'Failed to start migration');
@@ -214,8 +239,11 @@ export default function DataStores() {
   return (
     <AppShell>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>Data Stores</h2>
+        <h2 style={{ margin: 0 }}>Data Stores{dataStores ? ` (${dataStores.length})` : ''}</h2>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => { invalidateCache(DS_CACHE_KEY); loadDataStores(true); }} disabled={refreshing} style={{ width: 'auto' }}>
+            {refreshing ? '↻ Loading…' : '↻ Refresh'}
+          </button>
           <button
             className="btn"
             disabled={!canStart || selectedKeys.size === 0}
@@ -297,12 +325,15 @@ export default function DataStores() {
         </div>
 
         {dataStores === null && !loadError && (
-          <div className="empty-state">Loading data stores…</div>
+          <table className="table" style={{ width: '100%' }}>
+            <thead><tr><th style={{ width: 32 }} /><th>Data Store Name</th><th>Integration Flow</th><th>Type</th><th>Entries</th></tr></thead>
+            <tbody><TableSkeleton rows={6} cols={4} hasCheckbox /></tbody>
+          </table>
         )}
 
-        {dataStores !== null && visibleDataStores.length === 0 && (
+        {dataStores !== null && visibleDataStores.length === 0 && !loadError && (
           <div className="empty-state">
-            No data stores found{search ? ' matching filter' : ' on source tenant'}.
+            No data stores found{debouncedSearch ? ' matching filter' : ' on source tenant'}.
           </div>
         )}
 

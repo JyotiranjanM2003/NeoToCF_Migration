@@ -7,7 +7,7 @@
 
 const tenantSelection = require('../services/tenantSelection.service');
 const variableMigrationService = require('../services/variableMigration.service');
-const migrationService = require('../services/migration.service'); // for getStatus/getReport reuse
+const MigrationModel = require('../models/Migration.model');
 
 /**
  * GET /api/variables/list
@@ -16,7 +16,7 @@ const migrationService = require('../services/migration.service'); // for getSta
  */
 async function list(req, res, next) {
   try {
-    const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+    const { sourceTenant, targetTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
     if (!sourceTenant) {
       return res.status(400).json({
         code: 'NO_SOURCE_SELECTED',
@@ -24,8 +24,29 @@ async function list(req, res, next) {
       });
     }
 
-    const variables = await variableMigrationService.listSourceVariables(sourceTenant);
-    res.json({ variables });
+    // Fetch variables and (if target is selected) their last migration status in parallel.
+    const [variables, statusRows] = await Promise.all([
+      variableMigrationService.listSourceVariables(sourceTenant),
+      targetTenant
+        ? MigrationModel.latestStatusByVariableForUser(req.user.userId, targetTenant.TARGETTENANTID)
+        : Promise.resolve([]),
+    ]);
+
+    // Build a lookup: "variableName::integrationFlow" → { status, lastMigratedAt }
+    const statusMap = {};
+    for (const row of statusRows) {
+      statusMap[row.ARTIFACTID] = {
+        migrationStatus: row.STATUS,
+        lastMigratedAt: row.COMPLETEDAT || row.STARTEDAT,
+      };
+    }
+
+    const enriched = variables.map((v) => {
+      const key = `${v.variableName}::${v.integrationFlow}`;
+      return { ...v, ...(statusMap[key] || { migrationStatus: null, lastMigratedAt: null }) };
+    });
+
+    res.json({ variables: enriched, hasTarget: !!targetTenant });
   } catch (err) {
     next(err);
   }

@@ -2,40 +2,46 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import PackageTable from '../components/package/PackageTable.jsx';
+import useDebouncedValue from '../hooks/useDebouncedValue.js';
+import { getCache, setCache } from '../utils/resourceCache.js';
 import * as packageApi from '../services/api/package.api';
 import * as migrationApi from '../services/api/migration.api';
 
+const PKG_CACHE_KEY = 'packages';
+const PKG_CACHE_TTL = 5 * 60 * 1000;
+
 export default function Packages() {
   const navigate = useNavigate();
-  const [packages, setPackages] = useState(null);
+  const [packages, setPackages] = useState(() => getCache(PKG_CACHE_KEY) ?? null);
   const [error, setError] = useState('');
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [starting, setStarting] = useState(false);
   const [activeBatch, setActiveBatch] = useState(null);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 180);
   const [activeMigration, setActiveMigration] = useState(null);
 
   useEffect(() => {
-    packageApi
-      .listPackages()
-      .then((data) => setPackages(data.packages))
-      .catch((err) => {
-        const code = err.response?.data?.code;
-        if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
-          setError(err.response?.data?.message || 'Select a source tenant to browse packages.');
-          return;
-        }
-        setError(err.response?.data?.message || 'Failed to load packages');
-      });
+    const cached = getCache(PKG_CACHE_KEY);
+    if (!cached) {
+      packageApi
+        .listPackages()
+        .then((data) => {
+          setPackages(data.packages);
+          setCache(PKG_CACHE_KEY, data.packages, PKG_CACHE_TTL);
+        })
+        .catch((err) => {
+          const code = err.response?.data?.code;
+          if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
+            setError(err.response?.data?.message || 'Select a source tenant to browse packages.');
+            return;
+          }
+          setError(err.response?.data?.message || 'Failed to load packages');
+        });
+    }
 
-    migrationApi
-      .getActiveBatch()
-      .then((data) => setActiveBatch(data.batch))
-      .catch(() => {});
-      migrationApi
-  .getActiveMigration()
-  .then((data) => setActiveMigration(data.migration))
-  .catch(() => {});
+    migrationApi.getActiveBatch().then((data) => setActiveBatch(data.batch)).catch(() => {});
+    migrationApi.getActiveMigration().then((data) => setActiveMigration(data.migration)).catch(() => {});
   }, []);
 
   function toggleSelect(packageId) {
@@ -92,7 +98,7 @@ export default function Packages() {
   // Client-side filter only — doesn't touch the packages state or selection
   // logic, so selections made before typing a search term are preserved.
   const visiblePackages = (packages || []).filter((p) =>
-    p.name.toLowerCase().includes(search.trim().toLowerCase())
+    p.name.toLowerCase().includes(debouncedSearch.trim().toLowerCase())
   );
 
   return (

@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell.jsx';
+import TableSkeleton from '../components/common/TableSkeleton.jsx';
+import useDebouncedValue from '../hooks/useDebouncedValue.js';
+import { getCache, setCache } from '../utils/resourceCache.js';
 import * as numberRangeApi from '../services/api/numberRange.api';
+
+const NR_CACHE_KEY = 'numberranges';
+const NR_CACHE_TTL = 5 * 60 * 1000;
 
 const resultLabels = {
   migrated: 'Migrated successfully',
@@ -9,8 +15,9 @@ const resultLabels = {
 };
 
 export default function SecurityMaterials() {
-  const [numberRanges, setNumberRanges] = useState(null);
+  const [numberRanges, setNumberRanges] = useState(() => getCache(NR_CACHE_KEY) ?? null);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 180);
   const [selected, setSelected] = useState(() => new Set());
   const [loadingError, setLoadingError] = useState('');
   const [migrationError, setMigrationError] = useState('');
@@ -18,8 +25,14 @@ export default function SecurityMaterials() {
   const [results, setResults] = useState([]);
 
   useEffect(() => {
+    const cached = getCache(NR_CACHE_KEY);
+    if (cached) { setNumberRanges(cached); return; }
+
     numberRangeApi.listNumberRanges()
-      .then(({ numberRanges: ranges }) => setNumberRanges(ranges))
+      .then(({ numberRanges: ranges }) => {
+        setNumberRanges(ranges);
+        setCache(NR_CACHE_KEY, ranges, NR_CACHE_TTL);
+      })
       .catch((err) => {
         if (err.response?.data?.code === 'NO_SOURCE_SELECTED') {
           setLoadingError(err.response.data.message || 'Select a source tenant first to load Number Ranges.');
@@ -30,8 +43,8 @@ export default function SecurityMaterials() {
   }, []);
 
   const visibleRanges = useMemo(() => (numberRanges || []).filter((range) =>
-    range.name.toLowerCase().includes(search.trim().toLowerCase())
-  ), [numberRanges, search]);
+    range.name.toLowerCase().includes(debouncedSearch.trim().toLowerCase())
+  ), [numberRanges, debouncedSearch]);
   const allVisibleSelected = visibleRanges.length > 0 && visibleRanges.every((range) => selected.has(range.name));
 
   function toggle(name) {
@@ -85,7 +98,12 @@ export default function SecurityMaterials() {
           <h3 style={{ margin: 0 }}>Source Number Ranges</h3>
           <input className="input" placeholder="Search Number Ranges…" value={search} onChange={(event) => setSearch(event.target.value)} style={{ width: 220 }} />
         </div>
-        {numberRanges === null && !loadingError && <div className="empty-state">Loading Number Ranges…</div>}
+        {numberRanges === null && !loadingError && (
+          <table className="table number-range-table" style={{ width: '100%' }}>
+            <thead><tr><th /><th>Name</th><th>Description</th><th>Current Value</th><th>Min Value</th><th>Max Value</th><th>Rotate</th><th>Field Length</th></tr></thead>
+            <tbody><TableSkeleton rows={5} cols={7} hasCheckbox /></tbody>
+          </table>
+        )}
         {numberRanges !== null && visibleRanges.length === 0 && <div className="empty-state">No Number Ranges found{search ? ' matching filter' : ' on source tenant'}.</div>}
         {visibleRanges.length > 0 && (
           <div className="number-range-table-wrap"><table className="table number-range-table"><colgroup>

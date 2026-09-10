@@ -60,6 +60,28 @@ async function latestStatusByPackageForUser(userId, targetTenantId) {
   );
 }
 
+/**
+ * Latest migration outcome per variable (keyed by ArtifactId = "variableName::integrationFlow")
+ * for this user + target tenant. Joins MIGRATION_ARTIFACT to get per-variable granularity.
+ * Used by GET /api/variables/list to show the Status column without an extra round-trip.
+ *
+ * Only VARIABLE-scoped migrations are included (ScopeType = 'VARIABLE').
+ */
+async function latestStatusByVariableForUser(userId, targetTenantId) {
+  return query(
+    `SELECT ma.ArtifactId, ma.ArtifactName, ma.Status, ma.StartedAt, ma.CompletedAt
+     FROM (
+       SELECT ma2.ArtifactId, ma2.ArtifactName, ma2.Status, m2.StartedAt, m2.CompletedAt,
+              ROW_NUMBER() OVER (PARTITION BY ma2.ArtifactId ORDER BY m2.StartedAt DESC) AS RowNum
+       FROM MIGRATION_ARTIFACT ma2
+       INNER JOIN MIGRATION m2 ON m2.MigrationId = ma2.MigrationId
+       WHERE m2.UserId = ? AND m2.TargetTenantId = ? AND m2.ScopeType = 'VARIABLE'
+     ) ma
+     WHERE ma.RowNum = 1`,
+    [userId, targetTenantId]
+  );
+}
+
 async function listBySourceTenant(sourceTenantId) {
   return query(`SELECT * FROM ${TABLE} WHERE SourceTenantId = ?`, [sourceTenantId]);
 }
@@ -86,4 +108,4 @@ async function findActiveForUser(userId) {
   );
   return rows[0] || null;
 }
-module.exports = { create, setStatus, findById, listForUser, listForBatch, latestStatusByPackageForUser, listBySourceTenant, listByTargetTenant, deleteById, findActiveForUser };
+module.exports = { create, setStatus, findById, listForUser, listForBatch, latestStatusByPackageForUser, latestStatusByVariableForUser, listBySourceTenant, listByTargetTenant, deleteById, findActiveForUser };

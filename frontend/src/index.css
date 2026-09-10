@@ -20,6 +20,9 @@
   --danger: #B91C1C;
   --danger-soft: #FBEAEA;
 
+  /* Hover surface — slightly darker than surface-sunken */
+  --surface-hover: #E4E7ED;
+
   /* Type */
   --font-display: 'IBM Plex Sans', system-ui, sans-serif;
   --font-body: 'IBM Plex Sans', system-ui, sans-serif;
@@ -207,34 +210,46 @@ a:focus-visible {
   font-size: 13px;
 }
 
+/* Base button — defaults to the secondary (outlined) style so that plain
+   className="btn" is always visually consistent without needing btn-secondary. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 9px 16px;
+  padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
+  color: var(--ink);
   cursor: pointer;
   font-family: var(--font-body);
+  transition: border-color 0.12s, background 0.12s;
+  white-space: nowrap;
 }
+.btn:hover:not(:disabled) { border-color: var(--line); background: var(--surface-sunken); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-primary {
   background: var(--accent);
+  border-color: var(--accent);
   color: white;
-  width: 100%;
 }
-.btn-primary:hover { background: var(--accent-strong); }
-.btn-primary:disabled { background: #A6ACB6; cursor: not-allowed; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
+.btn-primary:disabled { background: #A6ACB6; border-color: #A6ACB6; cursor: not-allowed; opacity: 1; }
 
+/* Full-width variant — use explicitly where needed */
+.btn-primary-full { width: 100%; }
+
+/* btn-secondary is now identical to the base .btn — kept for explicit semantic use */
 .btn-secondary {
   background: var(--surface);
   border: 1px solid var(--border);
-  color: var(--ink);
+  color: var(--ink-muted);
 }
-.btn-secondary:hover { border-color: var(--line); }
+.btn-secondary:hover:not(:disabled) { border-color: var(--line); color: var(--ink); background: var(--surface-sunken); }
 
 .form-footer {
   margin-top: 16px;
@@ -342,6 +357,76 @@ a:focus-visible {
   50% { opacity: 0.55; }
 }
 
+/* ── Page toolbar (title + action buttons row) ───────────────────────────── */
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.page-toolbar h2 { margin: 0; }
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Card section header (title + filter input on same row) ─────────────── */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+}
+
+/* ── Inline form row (label + input stacked, items side by side) ────────── */
+.form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-field label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+/* ── Skeleton loading bars ─────────────────────────────────────────────────── */
+.skeleton-bar {
+  background: var(--border);
+  border-radius: var(--radius);
+  animation: pulse-line 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar { animation: none; opacity: 0.6; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .connector.live { animation: none; }
 }
@@ -415,40 +500,87 @@ a:focus-visible {
   margin-top: 4px;
 }
 /* ---------- variables / data tables ---------- */
+
+/* Standalone input — used in filter bars, inline forms */
+.input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--font-body);
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color 0.12s;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.input::placeholder { color: #A6ACB6; }
+
 .table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.table th,
+.table thead tr {
+  border-bottom: 2px solid var(--border);
+}
+
+.table th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  padding: 8px 8px 9px;
+  text-align: left;
+  vertical-align: middle;
+  background: var(--surface);
+}
+
 .table td {
   padding: 10px 8px;
   text-align: left;
   vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--surface-sunken);
 }
 
 .table th:first-child,
 .table td:first-child {
   width: 40px;
-  padding-left: 4px;
+  padding-left: 8px;
   padding-right: 4px;
   text-align: center;
 }
 
 .table th:nth-child(2),
 .table td:nth-child(2) {
-  width: 32%;
+  width: 28%;
 }
 
 .table th:nth-child(3),
 .table td:nth-child(3) {
-  width: 38%;
+  width: 28%;
 }
 
 .table th:nth-child(4),
 .table td:nth-child(4) {
-  width: 30%;
+  width: 22%;
+}
+
+.table th:nth-child(5),
+.table td:nth-child(5) {
+  width: 22%;
 }
 
 .table input[type="checkbox"] {
@@ -456,6 +588,8 @@ a:focus-visible {
   width: 15px;
   height: 15px;
   vertical-align: middle;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* ---------- number ranges ---------- */
