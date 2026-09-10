@@ -13,11 +13,11 @@ import MigrationReport from './pages/MigrationReport.jsx';
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx';
 import BatchMigrationReport from './pages/BatchMigrationReport.jsx';
 import Variables from './pages/Variables.jsx';
-<<<<<<< HEAD
+
 import DataStores from './pages/DataStores.jsx';
-=======
+
 import SecurityMaterials from './pages/SecurityMaterials.jsx';
->>>>>>> origin/rupal
+
 export default function App() {
   return (
     <Routes>
