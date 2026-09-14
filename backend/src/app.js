@@ -39,7 +39,9 @@ app.use('/api/number-ranges', require('./routes/numberRange.routes'));
 // Phase 3+ (Data Stores, Variables, Custom Tags, Number Ranges, Access
 // Policies, Security Artifacts, Value Mapping Values) mount here, following
 // the same service/controller/route pattern as packages & iflows above.
-
+app.use('/api/security-artifacts', require('./routes/securityMigration.routes'));
+// Phase 3+ (Custom Tags, Access Policies, Value Mapping Values) mount here,
+// following the same service/controller/route pattern as packages & iflows above.
 app.use(notFoundHandler);
 app.use(errorHandler);
 

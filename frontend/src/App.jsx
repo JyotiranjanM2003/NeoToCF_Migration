@@ -18,6 +18,10 @@ import DataStores from './pages/DataStores.jsx';
 
 import SecurityMaterials from './pages/SecurityMaterials.jsx';
 
+import SecurityArtifacts from './pages/SecurityArtifacts.jsx';
+import SecurityArtifactCategory from './pages/SecurityArtifactCategory.jsx';
+
+
 export default function App() {
   return (
     <Routes>
@@ -49,6 +53,9 @@ export default function App() {
       <Route path="/datastores" element={<ProtectedRoute><DataStores /></ProtectedRoute>} />
 
       <Route path="/number-ranges" element={<ProtectedRoute><SecurityMaterials /></ProtectedRoute>} />
+
+<Route path="/security" element={<ProtectedRoute><SecurityArtifacts /></ProtectedRoute>} />
+<Route path="/security/:categoryKey" element={<ProtectedRoute><SecurityArtifactCategory /></ProtectedRoute>} />
 
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

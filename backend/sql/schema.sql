@@ -59,6 +59,7 @@ CREATE TABLE MIGRATION (
     CompletedAt     TIMESTAMP
 );
 
+
 -- ========== MIGRATION ARTIFACT ==========
 CREATE TABLE MIGRATION_ARTIFACT (
     Id              NVARCHAR(36)  PRIMARY KEY,
@@ -132,3 +133,29 @@ CREATE TABLE USER_TENANT_SELECTION (
     FOREIGN KEY (TargetTenantId)
         REFERENCES TARGET_TENANT (TargetTenantId)
 );
+
+CREATE TABLE DATASTORE_OPERATION (
+    Id                  NVARCHAR(36)   PRIMARY KEY,
+    MigrationId         NVARCHAR(36)   NOT NULL REFERENCES MIGRATION(MigrationId),
+    MigrationArtifactId NVARCHAR(36)   REFERENCES MIGRATION_ARTIFACT(Id),
+    UserId              NVARCHAR(36)   NOT NULL REFERENCES APP_USER(UserId),
+    SourceTenantId      NVARCHAR(36)   NOT NULL REFERENCES SOURCE_TENANT(SourceTenantId),
+    TargetTenantId      NVARCHAR(36)   NOT NULL REFERENCES TARGET_TENANT(TargetTenantId),
+    DataStoreName       NVARCHAR(255)  NOT NULL,
+    IntegrationFlow     NVARCHAR(255),
+    DataStoreType       NVARCHAR(50),
+    EntryId             NVARCHAR(255),
+    HelperFlowId        NVARCHAR(255),
+    ExpiryPeriodDays    INT,
+    AlertPeriodDays     INT,
+    EntryCount          INT,
+    Status              NVARCHAR(20)   DEFAULT 'PENDING',
+    ErrorMessage        NVARCHAR(2000),
+    StartedAt           TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
+    CompletedAt          TIMESTAMP
+);
+
+CREATE INDEX IDX_DSOP_USER_STARTED ON DATASTORE_OPERATION (UserId, StartedAt DESC);
+
+CREATE INDEX IDX_DSOP_NAME_FLOW ON DATASTORE_OPERATION (DataStoreName, IntegrationFlow);
+

@@ -592,6 +592,27 @@ a:focus-visible {
   cursor: pointer;
 }
 
+/* Override the shared checkbox-table column sizing for plain 3-column tables
+   (Name / Type / Detail) that have no leading checkbox column. */
+.table.simple-table th:first-child,
+.table.simple-table td:first-child {
+  width: auto;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: left;
+}
+
+.table.simple-table th:nth-child(2),
+.table.simple-table td:nth-child(2) {
+  width: 20%;
+}
+
+.table.simple-table th:nth-child(3),
+.table.simple-table td:nth-child(3) {
+  width: auto;
+}
+
+
 /* ---------- number ranges ---------- */
 .number-range-table-wrap {
   overflow-x: auto;
@@ -653,3 +674,4 @@ a:focus-visible {
 .number-range-result-status.migrated { color: var(--accent-strong); }
 .number-range-result-status.already_exists { color: var(--warn); }
 .number-range-result-status.failed { color: var(--danger); }
+

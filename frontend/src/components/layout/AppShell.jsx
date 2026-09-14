@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { to: '/packages', label: 'Packages', enabled: true },
   { to: '/datastores', label: 'Data Stores', enabled: true },
   { to: '/variables', label: 'Variables', enabled: true },
-  { to: '/security', label: 'Security Materials', enabled: false },
+  { to: '/security', label: 'Security Materials', enabled: true },
   { to: '/number-ranges', label: 'Number Ranges', enabled: true },
 ];
 

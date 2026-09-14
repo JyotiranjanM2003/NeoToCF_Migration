@@ -101,4 +101,27 @@ async function getBinary(tenant, path, params = {}) {
   return res.data;
 }
 
-module.exports = { ensureSession, testConnection, get, getBinary };
+/**
+ * Generic authenticated write (POST/PUT/DELETE) against the SOURCE CPI OData
+ * API. Mirrors cfClient.write — needed for endpoints that must be called on
+ * the source tenant, e.g. SecurityContentTransports (MIG090).
+ */
+async function write(tenant, method, path, { params = {}, data, headers = {} } = {}) {
+  const session = await ensureSession(tenant);
+  const res = await axios({
+    method,
+    url: `https://${normalizeTenantHost(tenant.HOST)}/api/v1${path}`,
+    params,
+    data,
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'X-CSRF-Token': session.xsrfToken,
+      Cookie: session.cookies.map((c) => c.split(';')[0]).join('; '),
+      ...headers,
+    },
+  });
+  return res.data;
+}
+
+module.exports = { ensureSession, testConnection, get, getBinary, write };
+// module.exports = { ensureSession, testConnection, get, getBinary };
