@@ -131,9 +131,14 @@ async function checkDuplicates({ user, sourceTenant, targetTenant, dataStores = 
 
   const duplicates = [];
   for (const ds of candidates) {
+    // const prev = await DataStoreOperationModel.findLatestSuccess(
+    //   user.userId,
+    //   targetTenant.TARGETTENANTID,
+    //   ds.dataStoreName,
+    //   ds.integrationFlow || ''
+    // );
     const prev = await DataStoreOperationModel.findLatestSuccess(
-      user.userId,
-      targetTenant.TARGETTENANTID,
+      targetTenant.HOST,                    // ← was user.userId, targetTenant.TARGETTENANTID
       ds.dataStoreName,
       ds.integrationFlow || ''
     );
@@ -167,6 +172,8 @@ async function start({ user, sourceTenant, targetTenant, dataStores = [] }) {
     userId: user.userId,
     sourceTenantId: sourceTenant.SOURCETENANTID,
     targetTenantId: targetTenant.TARGETTENANTID,
+    sourceHost: sourceTenant.HOST,        // ← add
+    targetHost: targetTenant.HOST,        // ← add
     packageName,
     scopeType,
     batchId: null,
@@ -252,6 +259,8 @@ async function runPipeline({ migrationId, user, sourceTenant, targetTenant, data
       userId: user.userId,
       sourceTenantId: sourceTenant.SOURCETENANTID,
       targetTenantId: targetTenant.TARGETTENANTID,
+      sourceHost: sourceTenant.HOST,        // ← add
+      targetHost: targetTenant.HOST,        // ← add
       dataStoreName: ds.dataStoreName,
       integrationFlow: ds.integrationFlow,
       dataStoreType: ds.type || '',

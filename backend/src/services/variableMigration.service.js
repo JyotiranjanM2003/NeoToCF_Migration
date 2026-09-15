@@ -104,6 +104,8 @@ async function start({ user, sourceTenant, targetTenant, variables = [] }) {
     userId: user.userId,
     sourceTenantId: sourceTenant.SOURCETENANTID,
     targetTenantId: targetTenant.TARGETTENANTID,
+     sourceHost: sourceTenant.HOST,        // ← add
+  targetHost: targetTenant.HOST,        // ← add
     packageName,
     scopeType,
     batchId: null,

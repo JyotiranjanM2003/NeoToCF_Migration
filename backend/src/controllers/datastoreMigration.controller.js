@@ -8,15 +8,32 @@
 
 const tenantSelection = require('../services/tenantSelection.service');
 const datastoreMigrationService = require('../services/datastoreMigration.service');
-
+const MigrationModel = require('../models/Migration.model');
 /**
  * GET /api/datastores/list
  * Lists all data stores available on the user's currently-selected source tenant.
  * Returns: { dataStores: [{ dataStoreName, integrationFlow, type, totalEntries, ... }] }
  */
+// async function list(req, res, next) {
+//   try {
+//     const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+//     if (!sourceTenant) {
+//       return res.status(400).json({
+//         code: 'NO_SOURCE_SELECTED',
+//         message: 'Select a source tenant first',
+//       });
+//     }
+
+//     const dataStores = await datastoreMigrationService.listSourceDataStores(sourceTenant);
+//     res.json({ dataStores });
+//   } catch (err) {
+//     next(err);
+//   }
+// }
+
 async function list(req, res, next) {
   try {
-    const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+    const { sourceTenant, targetTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
     if (!sourceTenant) {
       return res.status(400).json({
         code: 'NO_SOURCE_SELECTED',
@@ -24,12 +41,30 @@ async function list(req, res, next) {
       });
     }
 
-    const dataStores = await datastoreMigrationService.listSourceDataStores(sourceTenant);
-    res.json({ dataStores });
+    const [dataStores, statusRows] = await Promise.all([
+      datastoreMigrationService.listSourceDataStores(sourceTenant),
+      targetTenant
+        ? MigrationModel.latestStatusByDataStoreForTargetHost(targetTenant.HOST)
+        : Promise.resolve([]),
+    ]);
+
+    const statusMap = new Map(statusRows.map((row) => [row.ARTIFACTID, row]));
+
+    const enriched = dataStores.map((d) => {
+      const record = statusMap.get(`${d.dataStoreName}::${d.integrationFlow}`);
+      return {
+        ...d,
+        migrationStatus: record ? record.STATUS : null,
+        lastMigratedAt: record ? record.COMPLETEDAT || record.STARTEDAT : null,
+      };
+    });
+
+    res.json({ dataStores: enriched });
   } catch (err) {
     next(err);
   }
 }
+
 
 /**
  * GET /api/datastores/lookup?dataStoreName=...&integrationFlow=...&type=...

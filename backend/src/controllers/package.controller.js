@@ -170,10 +170,11 @@ async function list(req, res, next) {
       return res.json({ packages: packages.map((p) => ({ ...p, migrationStatus: null })) });
     }
 
-    const latestByPackage = await MigrationModel.latestStatusByPackageForUser(
-      req.user.userId,
-      targetTenant.TARGETTENANTID
-    );
+    // const latestByPackage = await MigrationModel.latestStatusByPackageForUser(
+    //   req.user.userId,
+    //   targetTenant.TARGETTENANTID
+    // );
+    const latestByPackage = await MigrationModel.latestStatusByPackageForTargetHost(targetTenant.HOST);
     const statusMap = new Map(latestByPackage.map((row) => [row.PACKAGENAME, row]));
 
     const enriched = packages.map((p) => {

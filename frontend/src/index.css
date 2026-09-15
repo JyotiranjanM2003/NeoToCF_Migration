@@ -613,15 +613,47 @@ a:focus-visible {
 }
 
 
+/* Override the shared five-column sizing rules for this six-column table (Data Stores). */
+.table.datastore-table th:nth-child(2),
+.table.datastore-table td:nth-child(2) { width: 26%; }
+
+.table.datastore-table th:nth-child(3),
+.table.datastore-table td:nth-child(3) { width: 24%; }
+
+.table.datastore-table th:nth-child(4),
+.table.datastore-table td:nth-child(4) { width: 14%; }
+
+.table.datastore-table th:nth-child(5),
+.table.datastore-table td:nth-child(5) { width: 14%; }
+
+.table.datastore-table th:nth-child(6),
+.table.datastore-table td:nth-child(6) { width: 18%; }
+
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;   /* ← add this line */
+}
+/* ---------- number ranges ---------- */
 /* ---------- number ranges ---------- */
 .number-range-table-wrap {
-  overflow-x: auto;
   border-top: 1px solid var(--border);
 }
 
-/* Override the shared four-column sizing rules only for this eight-column table. */
+/* Compact 7-column layout (checkbox, expand toggle, name, current/min/max,
+   status). Description/Rotate/Field Length live in the expand panel below
+   each row instead of their own columns, so the table never needs
+   horizontal scrolling. */
 .table.number-range-table {
-  min-width: 1080px;
   table-layout: fixed;
 }
 
@@ -632,46 +664,68 @@ a:focus-visible {
   text-overflow: ellipsis;
 }
 
-.number-range-table th:nth-child(n),
-.number-range-table td:nth-child(n) {
-  width: auto;
+.number-range-table th:nth-child(2),
+.number-range-table td:nth-child(2) {
+  width: 32px;
+  text-align: center;
 }
 
-.number-range-table th:first-child,
-.number-range-table td:first-child {
-  width: auto;
+.number-range-table th:nth-child(3),
+.number-range-table td:nth-child(3) {
+  width: 28%;
 }
 
-.number-range-select-column { width: 44px; }
-.number-range-name-column { width: 180px; }
-.number-range-description-column { width: 250px; }
-.number-range-value-column { width: 118px; }
-.number-range-rotate-column { width: 90px; }
-.number-range-length-column { width: 110px; }
+.number-range-table th:nth-child(4),
+.number-range-table td:nth-child(4),
+.number-range-table th:nth-child(5),
+.number-range-table td:nth-child(5),
+.number-range-table th:nth-child(6),
+.number-range-table td:nth-child(6) {
+  width: 14%;
+}
 
-.number-range-results-heading {
+.number-range-table th:nth-child(7),
+.number-range-table td:nth-child(7) {
+  width: 22%;
+}
+
+.number-range-detail-row td {
+  background: var(--surface-sunken);
+  padding: 12px 16px;
+  white-space: normal;
+}
+
+.number-range-detail-grid {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 32px;
+  flex-wrap: wrap;
 }
 
-.number-range-result {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
+.number-range-detail-item dt {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  margin: 0 0 2px;
 }
 
-.number-range-result-status {
+.number-range-detail-item dd {
+  margin: 0;
+  font-size: 13px;
+}
+
+.number-range-expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
   font-size: 12px;
-  font-weight: 600;
+  color: var(--ink-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
 }
-
-.number-range-result-status.migrated { color: var(--accent-strong); }
-.number-range-result-status.already_exists { color: var(--warn); }
-.number-range-result-status.failed { color: var(--danger); }
-
+.number-range-expand-btn:hover {
+  background: var(--surface-hover, var(--surface-sunken));
+  color: var(--ink);
+}

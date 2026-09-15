@@ -222,6 +222,8 @@ async function start({ user, sourceTenant, targetTenant, targetCertificateAlias,
     userId: user.userId,
     sourceTenantId: sourceTenant.SOURCETENANTID,
     targetTenantId: targetTenant.TARGETTENANTID,
+     sourceHost: sourceTenant.HOST,        // ← add
+  targetHost: targetTenant.HOST,        // ← add
     packageName: `SEC:${category.label}`,
     scopeType: 'SECURITY',
     batchId: null,

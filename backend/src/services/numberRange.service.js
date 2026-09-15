@@ -4,6 +4,10 @@
  */
 const neoClient = require('./neoClient.service');
 const cfClient = require('./cfClient.service');
+const MigrationModel = require('../models/Migration.model');
+const MigrationArtifactModel = require('../models/MigrationArtifact.model');
+
+
 
 function odataString(value) {
   // OData string literals escape apostrophes by doubling them.
@@ -76,17 +80,68 @@ async function migrateOne(sourceTenant, targetTenant, name) {
   }
 }
 
-async function migrate(sourceTenant, targetTenant, names) {
+// async function migrate(sourceTenant, targetTenant, names) {
+//   const selectedNames = names.length > 0
+//     ? names
+//     : (await listSourceNumberRanges(sourceTenant)).map((range) => range.name).filter(Boolean);
+
+//   const results = [];
+//   for (const name of selectedNames) {
+//     // Sequential processing avoids overwhelming the target and keeps each
+//     // result independent when a source/target request fails.
+//     results.push(await migrateOne(sourceTenant, targetTenant, name));
+//   }
+//   return results;
+// }
+
+async function migrate(user, sourceTenant, targetTenant, names) {
   const selectedNames = names.length > 0
     ? names
     : (await listSourceNumberRanges(sourceTenant)).map((range) => range.name).filter(Boolean);
 
+  const migrationId = await MigrationModel.create({
+    userId: user.userId,
+    sourceTenantId: sourceTenant.SOURCETENANTID,
+    targetTenantId: targetTenant.TARGETTENANTID,
+    sourceHost: sourceTenant.HOST,
+    targetHost: targetTenant.HOST,
+    packageName: selectedNames.length === 1 ? `NR:${selectedNames[0]}` : 'NR:BATCH',
+    scopeType: 'NUMBER_RANGE',
+    batchId: null,
+  });
+
   const results = [];
+  let succeeded = 0;
+  let failed = 0;
+
   for (const name of selectedNames) {
+    const artifactId = await MigrationArtifactModel.create({
+      migrationId,
+      artifactId: name,
+      artifactName: name,
+      artifactType: 'NUMBER_RANGE',
+      version: null,
+    });
+
     // Sequential processing avoids overwhelming the target and keeps each
     // result independent when a source/target request fails.
-    results.push(await migrateOne(sourceTenant, targetTenant, name));
+    const result = await migrateOne(sourceTenant, targetTenant, name);
+    results.push(result);
+
+    if (result.status === 'failed') {
+      failed += 1;
+      await MigrationArtifactModel.setStatus(artifactId, 'FAILED', result.message || null);
+    } else {
+      // 'migrated' and 'already_exists' both mean the range is present on
+      // the target tenant — both count as MIGRATED for status-badge purposes.
+      succeeded += 1;
+      await MigrationArtifactModel.setStatus(artifactId, 'MIGRATED');
+    }
   }
+
+  const finalStatus = failed === 0 ? 'SUCCESS' : succeeded === 0 ? 'FAILED' : 'PARTIAL';
+  await MigrationModel.setStatus(migrationId, finalStatus, { completed: true });
+
   return results;
 }
 

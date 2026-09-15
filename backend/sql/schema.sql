@@ -59,7 +59,6 @@ CREATE TABLE MIGRATION (
     CompletedAt     TIMESTAMP
 );
 
-
 -- ========== MIGRATION ARTIFACT ==========
 CREATE TABLE MIGRATION_ARTIFACT (
     Id              NVARCHAR(36)  PRIMARY KEY,

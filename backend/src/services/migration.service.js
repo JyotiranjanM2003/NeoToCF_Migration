@@ -30,14 +30,25 @@ const STEPS = {
 async function start({ user, sourceTenant, targetTenant, packageId, artifactId, batchId = null }) {
   const scopeType = artifactId ? 'SINGLE_ARTIFACT' : 'PACKAGE';
 
+  // const migrationId = await MigrationModel.create({
+  //   userId: user.userId,
+  //   sourceTenantId: sourceTenant.SOURCETENANTID,
+  //   targetTenantId: targetTenant.TARGETTENANTID,
+  //   packageName: packageId,
+  //   scopeType,
+  //   batchId,
+  // });
+
   const migrationId = await MigrationModel.create({
-    userId: user.userId,
-    sourceTenantId: sourceTenant.SOURCETENANTID,
-    targetTenantId: targetTenant.TARGETTENANTID,
-    packageName: packageId,
-    scopeType,
-    batchId,
-  });
+  userId: user.userId,
+  sourceTenantId: sourceTenant.SOURCETENANTID,
+  targetTenantId: targetTenant.TARGETTENANTID,
+  sourceHost: sourceTenant.HOST,        // ← add
+  targetHost: targetTenant.HOST,        // ← add
+  packageName: packageId,
+  scopeType,
+  batchId,   // (or batchId in the batch-loop version)
+});
 
   runPipeline({ migrationId, user, sourceTenant, targetTenant, packageId, artifactId, scopeType }).catch(
     async (err) => {

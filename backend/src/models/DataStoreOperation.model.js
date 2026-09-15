@@ -6,12 +6,55 @@ const TABLE = 'DATASTORE_OPERATION';
 /**
  * Creates a PENDING row for one data-store operation and returns its Id.
  */
+// async function create({
+//   migrationId,
+//   migrationArtifactId = null,
+//   userId,
+//   sourceTenantId,
+//   targetTenantId,
+//   dataStoreName,
+//   integrationFlow = '',
+//   dataStoreType = '',
+//   entryId = '',
+//   helperFlowId = '',
+//   expiryPeriodDays = null,
+//   alertPeriodDays = null,
+//   entryCount = null,
+// }) {
+//   const id = uuidv4();
+//   await query(
+//     `INSERT INTO ${TABLE}
+//        (Id, MigrationId, MigrationArtifactId, UserId, SourceTenantId, TargetTenantId,
+//         DataStoreName, IntegrationFlow, DataStoreType, EntryId, HelperFlowId,
+//         ExpiryPeriodDays, AlertPeriodDays, EntryCount, Status)
+//      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+//     [
+//       id,
+//       migrationId,
+//       migrationArtifactId,
+//       userId,
+//       sourceTenantId,
+//       targetTenantId,
+//       dataStoreName,
+//       integrationFlow,
+//       dataStoreType,
+//       entryId,
+//       helperFlowId,
+//       expiryPeriodDays,
+//       alertPeriodDays,
+//       entryCount,
+//     ]
+//   );
+//   return id;
+// }
 async function create({
   migrationId,
   migrationArtifactId = null,
   userId,
   sourceTenantId,
   targetTenantId,
+  sourceHost,
+  targetHost,
   dataStoreName,
   integrationFlow = '',
   dataStoreType = '',
@@ -24,30 +67,18 @@ async function create({
   const id = uuidv4();
   await query(
     `INSERT INTO ${TABLE}
-       (Id, MigrationId, MigrationArtifactId, UserId, SourceTenantId, TargetTenantId,
+       (Id, MigrationId, MigrationArtifactId, UserId, SourceTenantId, TargetTenantId, SourceHost, TargetHost,
         DataStoreName, IntegrationFlow, DataStoreType, EntryId, HelperFlowId,
         ExpiryPeriodDays, AlertPeriodDays, EntryCount, Status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
     [
-      id,
-      migrationId,
-      migrationArtifactId,
-      userId,
-      sourceTenantId,
-      targetTenantId,
-      dataStoreName,
-      integrationFlow,
-      dataStoreType,
-      entryId,
-      helperFlowId,
-      expiryPeriodDays,
-      alertPeriodDays,
-      entryCount,
+      id, migrationId, migrationArtifactId, userId, sourceTenantId, targetTenantId, sourceHost, targetHost,
+      dataStoreName, integrationFlow, dataStoreType, entryId, helperFlowId,
+      expiryPeriodDays, alertPeriodDays, entryCount,
     ]
   );
   return id;
 }
-
 async function markRunning(id) {
   await query(`UPDATE ${TABLE} SET Status = 'RUNNING' WHERE Id = ?`, [id]);
 }
@@ -87,14 +118,26 @@ async function listForMigration(migrationId) {
  * (name + flow) to this exact target tenant, or null if never migrated
  * successfully before. Used for duplicate-migration detection.
  */
-async function findLatestSuccess(userId, targetTenantId, dataStoreName, integrationFlow = '') {
+// async function findLatestSuccess(userId, targetTenantId, dataStoreName, integrationFlow = '') {
+//   const rows = await query(
+//     `SELECT * FROM ${TABLE}
+//      WHERE UserId = ? AND TargetTenantId = ? AND DataStoreName = ? AND IntegrationFlow = ?
+//        AND Status = 'SUCCESS'
+//      ORDER BY CompletedAt DESC
+//      LIMIT 1`,
+//     [userId, targetTenantId, dataStoreName, integrationFlow]
+//   );
+//   return rows[0] || null;
+// }
+
+async function findLatestSuccess(targetHost, dataStoreName, integrationFlow = '') {
   const rows = await query(
     `SELECT * FROM ${TABLE}
-     WHERE UserId = ? AND TargetTenantId = ? AND DataStoreName = ? AND IntegrationFlow = ?
+     WHERE TargetHost = ? AND DataStoreName = ? AND IntegrationFlow = ?
        AND Status = 'SUCCESS'
      ORDER BY CompletedAt DESC
      LIMIT 1`,
-    [userId, targetTenantId, dataStoreName, integrationFlow]
+    [targetHost, dataStoreName, integrationFlow]
   );
   return rows[0] || null;
 }

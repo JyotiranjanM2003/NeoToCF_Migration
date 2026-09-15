@@ -1,7 +1,16 @@
 import React from 'react';
 
+// const BASE_CONFIG = {
+//   SUCCESS: { className: 'badge-connected', label: 'Already migrated' },
+//   UPDATED: { className: 'badge-connected', label: 'Already migrated' },
+//   PARTIAL: { className: 'badge-error', label: 'Partially migrated' },
+//   FAILED:  { className: 'badge-error',  label: 'Migration failed' },
+//   RUNNING: { className: 'badge-disconnected', label: 'Migrating…' },
+// };
+
 const BASE_CONFIG = {
   SUCCESS: { className: 'badge-connected', label: 'Already migrated' },
+  MIGRATED: { className: 'badge-connected', label: 'Already migrated' },   // ← add this line
   UPDATED: { className: 'badge-connected', label: 'Already migrated' },
   PARTIAL: { className: 'badge-error', label: 'Partially migrated' },
   FAILED:  { className: 'badge-error',  label: 'Migration failed' },

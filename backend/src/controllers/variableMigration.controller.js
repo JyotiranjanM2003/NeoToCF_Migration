@@ -27,8 +27,11 @@ async function list(req, res, next) {
     // Fetch variables and (if target is selected) their last migration status in parallel.
     const [variables, statusRows] = await Promise.all([
       variableMigrationService.listSourceVariables(sourceTenant),
+      // targetTenant
+      //   ? MigrationModel.latestStatusByVariableForUser(req.user.userId, targetTenant.TARGETTENANTID)
+      //   : Promise.resolve([]),
       targetTenant
-        ? MigrationModel.latestStatusByVariableForUser(req.user.userId, targetTenant.TARGETTENANTID)
+        ? MigrationModel.latestStatusByVariableForTargetHost(targetTenant.HOST)
         : Promise.resolve([]),
     ]);
 

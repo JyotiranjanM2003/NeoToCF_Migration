@@ -1,17 +1,51 @@
 const tenantSelection = require('../services/tenantSelection.service');
 const numberRangeService = require('../services/numberRange.service');
+const MigrationModel = require('../models/Migration.model');
+
+
+// async function list(req, res, next) {
+//   try {
+//     const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+//     if (!sourceTenant) {
+//       return res.status(400).json({ code: 'NO_SOURCE_SELECTED', message: 'No source tenant selected. Please select a source tenant first.' });
+//     }
+//     res.json({ numberRanges: await numberRangeService.listSourceNumberRanges(sourceTenant) });
+//   } catch (err) {
+//     next(err);
+//   }
+// }
 
 async function list(req, res, next) {
   try {
-    const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+    const { sourceTenant, targetTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
     if (!sourceTenant) {
       return res.status(400).json({ code: 'NO_SOURCE_SELECTED', message: 'No source tenant selected. Please select a source tenant first.' });
     }
-    res.json({ numberRanges: await numberRangeService.listSourceNumberRanges(sourceTenant) });
+
+    const [numberRanges, statusRows] = await Promise.all([
+      numberRangeService.listSourceNumberRanges(sourceTenant),
+      targetTenant
+        ? MigrationModel.latestStatusByNumberRangeForTargetHost(targetTenant.HOST)
+        : Promise.resolve([]),
+    ]);
+
+    const statusMap = new Map(statusRows.map((row) => [row.ARTIFACTID, row]));
+
+    const enriched = numberRanges.map((range) => {
+      const record = statusMap.get(range.name);
+      return {
+        ...range,
+        migrationStatus: record ? record.STATUS : null,
+        lastMigratedAt: record ? record.COMPLETEDAT || record.STARTEDAT : null,
+      };
+    });
+
+    res.json({ numberRanges: enriched });
   } catch (err) {
     next(err);
   }
 }
+
 
 async function getOne(req, res, next) {
   try {
@@ -40,7 +74,8 @@ async function migrate(req, res, next) {
     if (!targetTenant) {
       return res.status(400).json({ code: 'NO_TARGET_SELECTED', message: 'No target tenant selected. Please select a target tenant first.' });
     }
-    const results = await numberRangeService.migrate(sourceTenant, targetTenant, names.map((name) => name.trim()));
+    //const results = await numberRangeService.migrate(sourceTenant, targetTenant, names.map((name) => name.trim()));
+    const results = await numberRangeService.migrate(req.user, sourceTenant, targetTenant, names.map((name) => name.trim()));
     res.json({ results });
   } catch (err) {
     next(err);
