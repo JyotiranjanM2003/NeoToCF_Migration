@@ -59,6 +59,24 @@ function buildTransportType(category, subTypeKeys) {
 
 // ─── Listing (review UI only) ────────────────────────────────────────────────
 
+// async function fetchEntityCount(sourceTenant, entity) {
+//   try {
+//     const data = await neoClient.get(sourceTenant, `/${entity}`);
+//     return (data?.d?.results || []).length;
+//   } catch (err) {
+//     return null; // entity not exposed on this tenant/plan — degrade gracefully
+//   }
+// }
+
+// in fetchEntityCount
+async function fetchEntityCount(sourceTenant, entity) {
+  try {
+    const data = await neoClient.get(sourceTenant, `/${entity}`);
+    return (data?.d?.results || []).length;
+  } catch {
+    return null; // entity not available on this tenant — degrade gracefully
+  }
+}
 
 /** Tile grid data for the Manage Security landing page. */
 async function listCategories(sourceTenant) {
@@ -139,14 +157,12 @@ async function listCategoryEntries(sourceTenant, categoryKey) {
           detail: row.Description ?? row.Type ?? row.KeyType ?? row.ValidNotAfter ?? '',
         });
       });
-    } catch (err) {
+    } catch {
       // Entity not available on this tenant/plan — skip it, don't fail the page.
     }
   }
 
   // Deduplicate by name: later (more-specific) sources overwrite earlier ones.
-  // listSources is ordered with UserCredentials first and specialised types after,
-  // so a name present in both keeps the specialised type label.
   const byName = new Map();
   for (const entry of rawEntries) {
     byName.set(entry.name, entry);
