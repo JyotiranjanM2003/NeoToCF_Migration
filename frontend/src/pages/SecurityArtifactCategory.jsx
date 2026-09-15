@@ -6,6 +6,11 @@ import useDebouncedValue from '../hooks/useDebouncedValue.js';
 import * as securityApi from '../services/api/securityMigration.api';
 import { SECURITY_ALIAS_STORAGE_KEY } from './SecurityArtifacts.jsx';
 import { SubTypeIcon } from '../components/security/SecurityIcons.jsx';
+import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
+
+const ENTRIES_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const CATEGORIES_CACHE_KEY = 'security:categories';
+const entriesCacheKey = (key) => `security:entries:${key}`;
 
 
 export default function SecurityArtifactCategory() {
@@ -13,7 +18,7 @@ export default function SecurityArtifactCategory() {
     const navigate = useNavigate();
     const alias = sessionStorage.getItem(SECURITY_ALIAS_STORAGE_KEY) || '';
 
-    const [data, setData] = useState(null);
+    const [data, setData] = useState(() => getCache(entriesCacheKey(categoryKey)) ?? null);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
     const debouncedSearch = useDebouncedValue(search, 180);
@@ -26,11 +31,21 @@ export default function SecurityArtifactCategory() {
             navigate('/security', { replace: true });
             return;
         }
+        // Serve from cache if still fresh
+        const cached = getCache(entriesCacheKey(categoryKey));
+        if (cached) {
+            setData(cached);
+            setError('');
+            return;
+        }
         setData(null);
         setError('');
         securityApi
             .listCategoryEntries(categoryKey)
-            .then(setData)
+            .then((result) => {
+                setData(result);
+                setCache(entriesCacheKey(categoryKey), result, ENTRIES_CACHE_TTL);
+            })
             .catch((err) => setError(err.response?.data?.message || 'Failed to load Security Artifacts'));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [categoryKey]);
@@ -101,6 +116,9 @@ export default function SecurityArtifactCategory() {
                 categoryKey,
                 subTypeKeys,
             });
+            // Invalidate caches so the next visit re-fetches fresh counts
+            invalidateCache(entriesCacheKey(categoryKey));
+            invalidateCache(CATEGORIES_CACHE_KEY);
             navigate(`/migrations/${migrationId}`);
         } catch (err) {
             setStartError(err.response?.data?.message || 'Failed to start migration');
@@ -155,11 +173,29 @@ export default function SecurityArtifactCategory() {
                 <div className="empty-state">This category isn't covered by the MIG090 Security Content Transport API yet.</div>
             )}
 
-            {data && data.supported && data.entries.length === 0 && (
+            {data && data.noListing && (
+                <>
+                    <div className="card" style={{ marginBottom: 16, padding: '16px 20px', borderLeft: '4px solid var(--accent, #0070f3)' }}>
+                        <p style={{ margin: 0, color: 'var(--text-secondary, #555)' }}>
+                            <strong>Note:</strong> SAP CPI does not expose JDBC Material entries via its OData API,
+                            so individual entries cannot be listed here. Migration is still fully supported —
+                            clicking <strong>Migrate All</strong> will transport all JDBC Data Sources to the target tenant
+                            via the Security Content Transport API.
+                        </p>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                        <button className="btn btn-primary" style={{ width: 'auto' }} disabled={starting} onClick={migrateAll}>
+                            {starting ? 'Starting…' : 'Migrate All'}
+                        </button>
+                    </div>
+                </>
+            )}
+
+            {data && data.supported && !data.noListing && data.entries.length === 0 && (
                 <div className="empty-state">No {data.label} entries found on the source tenant.</div>
             )}
 
-            {data && data.entries.length > 0 && (
+            {data && !data.noListing && data.entries.length > 0 && (
                 <>
                     {/* <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" onClick={selectAll}>Select all</button>

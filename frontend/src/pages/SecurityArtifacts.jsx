@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import * as securityApi from '../services/api/securityMigration.api';
 import { CategoryIcon } from '../components/security/SecurityIcons.jsx';
+import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
+
+const CATEGORIES_CACHE_KEY = 'security:categories';
+const CATEGORIES_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
 
 export const SECURITY_ALIAS_STORAGE_KEY = 'securityTargetCertAlias';
@@ -13,7 +17,7 @@ export default function SecurityArtifacts() {
     const [verifiedAlias, setVerifiedAlias] = useState(() => sessionStorage.getItem(SECURITY_ALIAS_STORAGE_KEY) || '');
     const [verifying, setVerifying] = useState(false);
     const [verifyError, setVerifyError] = useState('');
-    const [categories, setCategories] = useState(null);
+    const [categories, setCategories] = useState(() => getCache(CATEGORIES_CACHE_KEY) ?? null);
     const [categoriesError, setCategoriesError] = useState('');
 
     useEffect(() => {
@@ -22,11 +26,20 @@ export default function SecurityArtifacts() {
     }, [verifiedAlias]);
 
     function loadCategories() {
+        // Serve from cache if still fresh
+        const cached = getCache(CATEGORIES_CACHE_KEY);
+        if (cached) {
+            setCategories(cached);
+            return;
+        }
         setCategories(null);
         setCategoriesError('');
         securityApi
             .listCategories()
-            .then((data) => setCategories(data.categories))
+            .then((data) => {
+                setCategories(data.categories);
+                setCache(CATEGORIES_CACHE_KEY, data.categories, CATEGORIES_CACHE_TTL);
+            })
             .catch((err) => {
                 const code = err.response?.data?.code;
                 if (code === 'NO_SOURCE_SELECTED') {
@@ -67,6 +80,7 @@ export default function SecurityArtifacts() {
 
     function handleChangeAlias() {
         sessionStorage.removeItem(SECURITY_ALIAS_STORAGE_KEY);
+        invalidateCache(CATEGORIES_CACHE_KEY);
         setVerifiedAlias('');
         setCategories(null);
     }

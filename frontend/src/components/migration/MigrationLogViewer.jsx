@@ -26,12 +26,12 @@ export default function MigrationLogViewer({ logs }) {
             fontFamily: 'var(--font-mono)',
           }}
         >
-          <span style={{ color: 'var(--ink-muted)', minWidth: 150 }}>
+          <span style={{ color: 'var(--ink-muted)', minWidth: 80, flexShrink: 0 }}>
             {new Date(l.TIMESTAMP).toLocaleTimeString()}
           </span>
-          <span style={{ minWidth: 130, fontWeight: 600 }}>{l.STEP}</span>
-          <span style={{ color: STATUS_COLOR[l.STATUS] || 'var(--ink)', minWidth: 70 }}>{l.STATUS}</span>
-          <span style={{ color: 'var(--ink-muted)' }}>{l.MESSAGE}</span>
+          <span style={{ minWidth: 220, flexShrink: 0, fontWeight: 600 }}>{l.STEP}</span>
+          <span style={{ color: STATUS_COLOR[l.STATUS] || 'var(--ink)', minWidth: 70, flexShrink: 0 }}>{l.STATUS}</span>
+          <span style={{ color: 'var(--ink-muted)', flex: 1 }}>{l.MESSAGE}</span>
         </div>
       ))}
     </div>
