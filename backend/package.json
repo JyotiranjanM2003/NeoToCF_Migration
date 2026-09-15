@@ -10,7 +10,7 @@
     "db:init": "node scripts/initDb.js"
   },
   "dependencies": {
-    "@sap/hana-client": "^2.19.21",
+    "@sap/hana-client": "^2.29.27",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
