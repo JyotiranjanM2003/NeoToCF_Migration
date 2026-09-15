@@ -14,13 +14,14 @@
  * only — MIG090 has no per-entry migration; it always transports every
  * entry of the Type(s) requested as one encrypted package.
  *
- * NOTE: `PGPKeys` and `JDBCDataSources` entity-set names are best-effort
- * (not independently confirmed against SAP's Security Content OData
- * metadata). If your tenant exposes them under a different name, update
- * the `entity` value here — listing degrades gracefully (shows '—') if
- * the name is wrong, it won't break the page. `UserCredentials`,
- * `SecureParameters`, `OAuth2ClientCredentials` and `KeystoreEntries`
- * are confirmed.
+ * CONFIRMED listable via /api/v1 OData:
+ *   UserCredentials, SecureParameters, OAuth2ClientCredentials, KeystoreEntries
+ *
+ * NOT exposed via /api/v1 OData (SAP does not list them via API):
+ *   OAuth2SAMLBearerAssertion, OAuth2AuthorizationCode, KnownHosts,
+ *   PGPKeys, JDBCDataSources
+ *   → These are transport-only: SecurityContentTransports still migrates them.
+ *   → Entries for OAuth2SAML / KnownHosts appear in UserCredentials listing.
  */
 
 const SECURITY_CATEGORIES = [
@@ -31,13 +32,13 @@ const SECURITY_CATEGORIES = [
     supported: true,
     transportType:
       'userCredentials,secureParameter,oAuth2ClientCredentials,oAuth2SAMLBearerAssertion,oAuth2AuthorizationCode,knownHosts',
+    // Only include entity sets confirmed to exist in the Neo /api/v1 OData API.
+    // OAuth2SAMLBearerAssertion, OAuth2AuthorizationCode and KnownHosts all return 404;
+    // their entries appear in UserCredentials from the Neo API side.
     listSources: [
       { entity: 'UserCredentials', subTypeKey: 'userCredentials', subTypeLabel: 'User Credential' },
       { entity: 'SecureParameters', subTypeKey: 'secureParameter', subTypeLabel: 'Secure Parameter' },
       { entity: 'OAuth2ClientCredentials', subTypeKey: 'oAuth2ClientCredentials', subTypeLabel: 'OAuth2 Client Credentials' },
-      { entity: 'OAuth2SAMLBearerAssertion', subTypeKey: 'oAuth2SAMLBearerAssertion', subTypeLabel: 'OAuth2 SAML Bearer Assertion' },
-      { entity: 'OAuth2AuthorizationCode', subTypeKey: 'oAuth2AuthorizationCode', subTypeLabel: 'OAuth2 Authorization Code' },
-      { entity: 'KnownHosts', subTypeKey: 'knownHosts', subTypeLabel: 'Known Host' },
     ],
   },
   {
@@ -53,8 +54,9 @@ const SECURITY_CATEGORIES = [
     label: 'PGP Keys',
     countLabel: 'PGP Keys',
     supported: true,
+    noListing: true, // SAP CPI exposes no OData entity for PGP Keys; migration via SecurityContentTransports still works
     transportType: 'pgpKeys',
-    listSources: [{ entity: 'PGPKeys', subTypeKey: 'pgpKeys', subTypeLabel: 'PGP Key' }],
+    listSources: [],
   },
   {
     key: 'certificateUserMappings',
@@ -75,8 +77,9 @@ const SECURITY_CATEGORIES = [
     label: 'JDBC Material',
     countLabel: 'Artifacts',
     supported: true,
+    noListing: true, // SAP CPI exposes no OData entity for JDBC items; migration via SecurityContentTransports still works
     transportType: 'jdbcDatasource',
-    listSources: [{ entity: 'JDBCDataSources', subTypeKey: 'jdbcDatasource', subTypeLabel: 'JDBC Data Source' }],
+    listSources: [],
   },
   {
     key: 'connectivityTests',
