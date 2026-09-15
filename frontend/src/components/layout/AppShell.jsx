@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/variables', label: 'Variables', enabled: true },
   { to: '/security', label: 'Security Materials', enabled: true },
   { to: '/number-ranges', label: 'Number Ranges', enabled: true },
+  { to: '/migration-report', label: 'Migration Report', enabled: true },
 ];
 
 export default function AppShell({ children }) {

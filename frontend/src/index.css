@@ -629,6 +629,33 @@ a:focus-visible {
 .table.datastore-table th:nth-child(6),
 .table.datastore-table td:nth-child(6) { width: 18%; }
 
+/* Override the shared five-column sizing (which assumes a checkbox in
+   column 1) for the Migration Report table, which has no checkbox. */
+.table.report-table th:first-child,
+.table.report-table td:first-child {
+  width: 16%;
+  padding-left: 8px;
+  text-align: left;
+}
+
+.table.report-table th:nth-child(2),
+.table.report-table td:nth-child(2) { width: 28%; }
+
+.table.report-table th:nth-child(3),
+.table.report-table td:nth-child(3) { width: 20%; }
+
+.table.report-table th:nth-child(4),
+.table.report-table td:nth-child(4) { width: 20%; }
+
+.table.report-table th:nth-child(5),
+.table.report-table td:nth-child(5) { width: 16%; }
+
+.table.report-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 
 .badge {
   display: inline-flex;
@@ -729,3 +756,54 @@ a:focus-visible {
   background: var(--surface-hover, var(--surface-sunken));
   color: var(--ink);
 }
+
+/* ---------- migration report ---------- */
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.report-stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.report-stat-card:hover { box-shadow: var(--shadow-card); }
+.report-stat-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.report-stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; margin-bottom: 4px; }
+.report-stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); }
+
+.report-stat-card.report-stat-success .report-stat-value { color: var(--accent-strong); }
+.report-stat-card.report-stat-danger .report-stat-value { color: var(--danger); }
+.report-stat-card.report-stat-warn .report-stat-value { color: var(--warn); }
+.report-stat-card.report-stat-info .report-stat-value { color: var(--ink-muted); }
+
+.report-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.report-chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+.report-chip:hover { border-color: var(--accent); color: var(--ink); }
+.report-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.report-row { cursor: pointer; }
+.report-row:hover { background: var(--surface-sunken); }

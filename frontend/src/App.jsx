@@ -20,7 +20,7 @@ import SecurityMaterials from './pages/SecurityMaterials.jsx';
 
 import SecurityArtifacts from './pages/SecurityArtifacts.jsx';
 import SecurityArtifactCategory from './pages/SecurityArtifactCategory.jsx';
-
+import MigrationReportPage from './pages/MigrationReportPage.jsx';
 
 export default function App() {
   return (
@@ -56,10 +56,12 @@ export default function App() {
 
 <Route path="/security" element={<ProtectedRoute><SecurityArtifacts /></ProtectedRoute>} />
 <Route path="/security/:categoryKey" element={<ProtectedRoute><SecurityArtifactCategory /></ProtectedRoute>} />
-
+ <Route path="/migration-report" element={<ProtectedRoute><MigrationReportPage /></ProtectedRoute>} />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
+     
     </Routes>
   );
 }
