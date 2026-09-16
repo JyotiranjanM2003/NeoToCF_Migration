@@ -8,8 +8,6 @@ import useDebouncedValue from '../hooks/useDebouncedValue.js';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as datastoreApi from '../services/api/datastoreMigration.api';
 import * as migrationApi from '../services/api/migration.api';
-import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
-
 
 const DS_CACHE_KEY = 'datastores';
 const DS_CACHE_TTL = 3 * 60 * 1000;
@@ -73,33 +71,7 @@ export default function DataStores() {
       })
       .finally(() => setRefreshing(false));
   }
-  /**
-   * After a migration completes, patch the per-data-store migrationStatus/
-   * lastMigratedAt directly into state (and the cache) so the Status column
-   * reflects the outcome without a network round-trip.
-   */
-  function applyMigrationOutcomes(artifacts) {
-    if (!artifacts?.length) return;
 
-    // ArtifactId is stored as "dataStoreName::integrationFlow" by the service
-    const outcomeMap = {};
-    for (const a of artifacts) {
-      outcomeMap[a.ARTIFACTID] = {
-        migrationStatus: a.STATUS,
-        lastMigratedAt: a.COMPLETEDAT || a.STARTEDAT || new Date().toISOString(),
-      };
-    }
-
-    setDataStores((prev) => {
-      if (!prev) return prev;
-      const next = prev.map((d) => {
-        const key = `${d.dataStoreName}::${d.integrationFlow}`;
-        return outcomeMap[key] ? { ...d, ...outcomeMap[key] } : d;
-      });
-      setCache(DS_CACHE_KEY, next, DS_CACHE_TTL);
-      return next;
-    });
-  }
   useEffect(() => {
     if (!getCache(DS_CACHE_KEY)) loadDataStores(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,22 +87,13 @@ export default function DataStores() {
         const data = await migrationApi.getMigrationStatus(migrationId);
         if (cancelled) return;
         setMigStatus(data);
-        // if (TERMINAL_STATUSES.includes(data.migration.STATUS)) {
-        //   const full = await migrationApi.getMigrationReport(migrationId);
-        //   if (!cancelled) {
-        //     setMigReport(full);
-        //     setStarting(false);
-        //   }
-        //}
         if (TERMINAL_STATUSES.includes(data.migration.STATUS)) {
           const full = await migrationApi.getMigrationReport(migrationId);
           if (!cancelled) {
             setMigReport(full);
             setStarting(false);
-            applyMigrationOutcomes(data.artifacts);
           }
-        }
-        else {
+        } else {
           pollRef.current = setTimeout(poll, POLL_INTERVAL_MS);
         }
       } catch (err) {
@@ -363,10 +326,8 @@ export default function DataStores() {
 
         {dataStores === null && !loadError && (
           <table className="table" style={{ width: '100%' }}>
-            {/* <thead><tr><th style={{ width: 32 }} /><th>Data Store Name</th><th>Integration Flow</th><th>Type</th><th>Entries</th></tr></thead>
-            <tbody><TableSkeleton rows={6} cols={4} hasCheckbox /></tbody> */}
-            <thead><tr><th style={{ width: 32 }} /><th>Data Store Name</th><th>Integration Flow</th><th>Type</th><th>Entries</th><th>Status</th></tr></thead>
-            <tbody><TableSkeleton rows={6} cols={5} hasCheckbox /></tbody>
+            <thead><tr><th style={{ width: 32 }} /><th>Data Store Name</th><th>Integration Flow</th><th>Type</th><th>Entries</th></tr></thead>
+            <tbody><TableSkeleton rows={6} cols={4} hasCheckbox /></tbody>
           </table>
         )}
 
@@ -377,24 +338,22 @@ export default function DataStores() {
         )}
 
         {visibleDataStores.length > 0 && (
-          <table className="table datastore-table" style={{ width: '100%' }}>
-            
-            
-                <thead>
-                  <tr>
-                    <th>
-                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} />
-                    </th>
-                    <th>Data Store Name</th>
-                    <th>Integration Flow</th>
-                    <th>Type</th>
-                    <th>Entries</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-              
-           
-
+          <table className="table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
+                <th>Data Store Name</th>
+                <th>Integration Flow</th>
+                <th>Type</th>
+                <th>Entries</th>
+              </tr>
+            </thead>
             <tbody>
               {visibleDataStores.map((d) => {
                 const k = dsKey(d);
@@ -416,11 +375,7 @@ export default function DataStores() {
                       {d.integrationFlow || '(global)'}
                     </td>
                     <td style={{ fontSize: 13 }}>{d.type || '—'}</td>
-                    {/* <td style={{ fontSize: 13 }}>{d.totalEntries ?? '—'}</td> */}
                     <td style={{ fontSize: 13 }}>{d.totalEntries ?? '—'}</td>
-                    <td>
-                      <MigrationStatusBadge status={d.migrationStatus} lastMigratedAt={d.lastMigratedAt} successLabel="✓ Migrated" />
-                    </td>
                   </tr>
                 );
               })}
@@ -460,29 +415,29 @@ export default function DataStores() {
 
       {/* ── Duplicate-migration warning popup ────────────────────────────── */}
       {duplicateWarning && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div className="card" style={{ maxWidth: 340, width: '90%', padding: 20, textAlign: 'center' }}>
-            <p style={{ fontSize: 14, margin: '0 0 16px 0' }}>
-              {duplicateWarning.duplicates.length === 1
-                ? `"${duplicateWarning.duplicates[0].dataStoreName}" is already migrated.`
-                : `${duplicateWarning.duplicates.length} selected data stores are already migrated.`}
-            </p>
-            <button className="btn" onClick={() => setDuplicateWarning(null)}>
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+  <div
+    style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+    }}
+  >
+    <div className="card" style={{ maxWidth: 340, width: '90%', padding: 20, textAlign: 'center' }}>
+      <p style={{ fontSize: 14, margin: '0 0 16px 0' }}>
+        {duplicateWarning.duplicates.length === 1
+          ? `"${duplicateWarning.duplicates[0].dataStoreName}" is already migrated.`
+          : `${duplicateWarning.duplicates.length} selected data stores are already migrated.`}
+      </p>
+      <button className="btn" onClick={() => setDuplicateWarning(null)}>
+        OK
+      </button>
+    </div>
+  </div>
+)}
     </AppShell>
   );
 }

@@ -4,11 +4,12 @@ import MigrationStatusBadge from './MigrationStatusBadge.jsx';
 import EntityIcon from './EntityIcon.jsx';
 
 /**
- * Pure presentation — all selection state and handlers (toggleSelect,
- * selectAll, deselectAll, handleMigrateSelected) still live in Packages.jsx
- * exactly as before. This component only renders them as a table instead
- * of a stack of cards, and adds a header checkbox that calls the same
- * select-all/deselect-all toggle already defined there.
+ * Pure presentation — all selection state and handlers still live in
+ * Packages.jsx. This renders them with the shared `.data-table` styling
+ * so Packages matches Variables / Data Stores / Number Ranges.
+ *
+ * Clicking a row opens the package; the checkbox cell stops propagation
+ * so selecting never navigates.
  */
 export default function PackageTable({ packages, selectedIds, onToggleSelect, onToggleSelectAll }) {
   const navigate = useNavigate();
@@ -24,72 +25,63 @@ export default function PackageTable({ packages, selectedIds, onToggleSelect, on
   }, [someSelected, allSelected]);
 
   return (
-    <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+    <div className="table-scroll">
+      <table className="data-table">
         <thead>
-          <tr style={{ background: 'var(--surface-sunken)' }}>
-                        <th style={{ ...thStyle, width: 36 }}>
+          <tr>
+            <th className="col-check">
               <input
                 ref={headerCheckboxRef}
                 type="checkbox"
                 checked={allSelected}
                 onChange={onToggleSelectAll}
-                style={checkboxStyle}
+                aria-label="Select all visible packages"
               />
             </th>
-            <th style={{ ...thStyle, width: 48 }} />
-            <th style={thStyle}>Name</th>
-            <th style={thStyle}>Mode</th>
-            <th style={thStyle}>Version</th>
-            <th style={thStyle}>Description</th>
+            <th className="col-narrow" />
+            <th>Name</th>
+            <th>Mode</th>
+            <th>Version</th>
+            <th>Description</th>
+            <th className="col-status">Status</th>
           </tr>
         </thead>
         <tbody>
-          {packages.map((pkg) => (
-            <tr
-              key={pkg.id}
-              onClick={() => navigate(`/packages/${encodeURIComponent(pkg.id)}`)}
-              style={{ borderTop: '1px solid var(--border)', cursor: 'pointer' }}
-            >
-                            <td style={tdStyle} onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(pkg.id)}
-                  onChange={() => onToggleSelect(pkg.id)}
-                  style={checkboxStyle}
-                />
-              </td>
-              <td style={tdStyle}>
-                <EntityIcon type="package" />
-              </td>
-              <td style={tdStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                  {pkg.name}
-                  <MigrationStatusBadge status={pkg.migrationStatus} lastMigratedAt={pkg.lastMigratedAt} />
-                </div>
-              </td>
-              <td style={{ ...tdStyle, color: 'var(--ink-muted)' }}>{pkg.mode || '—'}</td>
-              <td style={tdStyle} className="mono">
-                {pkg.version}
-              </td>
-              <td style={{ ...tdStyle, color: 'var(--ink-muted)' }}>{pkg.description || ''}</td>
-            </tr>
-          ))}
+          {packages.map((pkg) => {
+            const isSelected = selectedIds.has(pkg.id);
+            return (
+              <tr
+                key={pkg.id}
+                className={`selectable${isSelected ? ' is-selected' : ''}`}
+                onClick={() => navigate(`/packages/${encodeURIComponent(pkg.id)}`)}
+                title="Open package"
+              >
+                <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleSelect(pkg.id)}
+                  />
+                </td>
+                <td className="col-narrow" style={{ color: 'var(--accent)' }}>
+                  <EntityIcon type="package" />
+                </td>
+                <td style={{ fontWeight: 600 }}>{pkg.name}</td>
+                <td className="cell-muted">{pkg.mode || '—'}</td>
+                <td className="cell-num">{pkg.version || '—'}</td>
+                <td className="cell-muted">{pkg.description || '—'}</td>
+                <td className="col-status">
+                  <MigrationStatusBadge
+                    status={pkg.migrationStatus}
+                    lastMigratedAt={pkg.lastMigratedAt}
+                    showIdle
+                  />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
-
-const thStyle = {
-  textAlign: 'left',
-  padding: '10px 16px',
-  fontSize: 11,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: 'var(--ink-muted)',
-};
-
-const tdStyle = { padding: '12px 16px', verticalAlign: 'top' };
-
-const checkboxStyle = { width: 15, height: 15, cursor: 'pointer' };

@@ -21,6 +21,7 @@ import SecurityMaterials from './pages/SecurityMaterials.jsx';
 import SecurityArtifacts from './pages/SecurityArtifacts.jsx';
 import SecurityArtifactCategory from './pages/SecurityArtifactCategory.jsx';
 import MigrationReportPage from './pages/MigrationReportPage.jsx';
+import TenantConnection from './pages/TenantConnection.jsx';
 
 export default function App() {
   return (
@@ -37,6 +38,8 @@ export default function App() {
 <Route path="/connect/source/:id" element={<ProtectedRoute><ConnectSourceTenant /></ProtectedRoute>} />
 <Route path="/connect/target" element={<ProtectedRoute><ConnectTargetTenant /></ProtectedRoute>} />
 <Route path="/connect/target/:id" element={<ProtectedRoute><ConnectTargetTenant /></ProtectedRoute>} />
+
+      <Route path="/tenants" element={<ProtectedRoute><TenantConnection /></ProtectedRoute>} />
 
       <Route path="/packages" element={<ProtectedRoute><Packages /></ProtectedRoute>} />
       <Route path="/packages/:packageId" element={<ProtectedRoute><PackageDetail /></ProtectedRoute>} />

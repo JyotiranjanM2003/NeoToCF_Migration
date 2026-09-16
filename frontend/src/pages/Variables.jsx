@@ -1,10 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import MigrationProgress from '../components/migration/MigrationProgress.jsx';
 import MigrationLogViewer from '../components/migration/MigrationLogViewer.jsx';
 import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
 import TableSkeleton from '../components/common/TableSkeleton.jsx';
+import PageHeader from '../components/common/PageHeader.jsx';
+import SearchField from '../components/common/SearchField.jsx';
+import StatusFilter, { matchesStatusFilter } from '../components/common/StatusFilter.jsx';
+import EmptyState from '../components/common/EmptyState.jsx';
+import SelectionBar from '../components/common/SelectionBar.jsx';
 import useDebouncedValue from '../hooks/useDebouncedValue.js';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as variableApi from '../services/api/variableMigration.api';
@@ -13,26 +18,22 @@ import * as migrationApi from '../services/api/migration.api';
 const TERMINAL_STATUSES = ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'];
 const POLL_INTERVAL_MS = 2500;
 const CACHE_KEY = 'variables';
-const CACHE_TTL_MS = 3 * 60 * 1000; // 3 min — shorter than packages since values change
+const CACHE_TTL_MS = 3 * 60 * 1000;
 
 export default function Variables() {
-  // ── Variable list state ───────────────────────────────────────────────────
+  // ── List state ────────────────────────────────────────────────────────────
   const [variables, setVariables] = useState(() => getCache(CACHE_KEY) ?? null);
-  const [hasTarget, setHasTarget] = useState(true); // optimistic; corrected on load
+  const [hasTarget, setHasTarget] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  // ── Search / filter (debounced so 500+ rows don't lag) ────────────────────
+  // ── Search / filter ───────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 180);
+  const [statusFilter, setStatusFilter] = useState('all');
 
   // ── Selection ─────────────────────────────────────────────────────────────
-  const [selectedKeys, setSelectedKeys] = useState(() => new Set()); // "name::flow"
-
-  // ── Specific-variable lookup form ─────────────────────────────────────────
-  const [specificName, setSpecificName] = useState('');
-  const [specificFlow, setSpecificFlow] = useState('');
-  const [lookupError, setLookupError] = useState('');
+  const [selectedKeys, setSelectedKeys] = useState(() => new Set());
 
   // ── Active migration ──────────────────────────────────────────────────────
   const [migrationId, setMigrationId] = useState(null);
@@ -42,7 +43,7 @@ export default function Variables() {
   const [starting, setStarting] = useState(false);
   const pollRef = useRef(null);
 
-  // ── Load variables ────────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────
   function loadVariables(force = false) {
     if (!force) {
       const cached = getCache(CACHE_KEY);
@@ -69,8 +70,6 @@ export default function Variables() {
   }
 
   useEffect(() => {
-    // If we have a cache hit, paint immediately and bail (no spinner, no request).
-    // The 3-min TTL acts as the safety net for staleness.
     if (!getCache(CACHE_KEY)) loadVariables(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -91,8 +90,6 @@ export default function Variables() {
           if (!cancelled) {
             setMigReport(full);
             setStarting(false);
-            // Patch migration status into local state + cache so the Status column
-            // updates immediately without a full re-fetch.
             applyMigrationOutcomes(data.artifacts);
           }
         } else {
@@ -111,17 +108,14 @@ export default function Variables() {
   }, [migrationId]);
 
   /**
-   * After a migration completes, patch the per-variable migrationStatus/lastMigratedAt
-   * directly into state (and update the cache) so the Status column reflects the
-   * outcome without a network round-trip.
+   * Patch per-variable outcomes into state + cache so the Status column
+   * updates as soon as the run finishes, without a re-fetch.
    */
   function applyMigrationOutcomes(artifacts) {
     if (!artifacts?.length) return;
 
-    // Build a map: "variableName::integrationFlow" → artifact outcome
     const outcomeMap = {};
     for (const a of artifacts) {
-      // ArtifactId is stored as "variableName::integrationFlow" by the service
       outcomeMap[a.ARTIFACTID] = {
         migrationStatus: a.STATUS,
         lastMigratedAt: a.COMPLETEDAT || a.STARTEDAT || new Date().toISOString(),
@@ -134,10 +128,10 @@ export default function Variables() {
         const key = `${v.variableName}::${v.integrationFlow}`;
         return outcomeMap[key] ? { ...v, ...outcomeMap[key] } : v;
       });
-      // Write the updated list back to cache so the next navigation also sees it
       setCache(CACHE_KEY, next, CACHE_TTL_MS);
       return next;
     });
+    setSelectedKeys(new Set());
   }
 
   // ── Selection helpers ─────────────────────────────────────────────────────
@@ -153,19 +147,24 @@ export default function Variables() {
   }
 
   function toggleSelectAll() {
-    const vis = visibleVariables;
-    const allSel = vis.length > 0 && vis.every((v) => selectedKeys.has(varKey(v)));
+    const allSel = visibleVariables.length > 0 && visibleVariables.every((v) => selectedKeys.has(varKey(v)));
     setSelectedKeys((prev) => {
       const next = new Set(prev);
-      if (allSel) vis.forEach((v) => next.delete(varKey(v)));
-      else vis.forEach((v) => next.add(varKey(v)));
+      if (allSel) visibleVariables.forEach((v) => next.delete(varKey(v)));
+      else visibleVariables.forEach((v) => next.add(varKey(v)));
       return next;
     });
   }
 
-  const visibleVariables = (variables || []).filter((v) =>
-    v.variableName.toLowerCase().includes(debouncedSearch.trim().toLowerCase())
-  );
+  const visibleVariables = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return (variables || []).filter(
+      (v) =>
+        (v.variableName.toLowerCase().includes(q) || (v.integrationFlow || '').toLowerCase().includes(q)) &&
+        matchesStatusFilter(v, statusFilter)
+    );
+  }, [variables, debouncedSearch, statusFilter]);
+
   const allVisibleSelected =
     visibleVariables.length > 0 && visibleVariables.every((v) => selectedKeys.has(varKey(v)));
 
@@ -182,7 +181,7 @@ export default function Variables() {
     });
     try {
       const { migrationId: id } = await variableApi.startVariableMigration(vars);
-      invalidateCache(CACHE_KEY); // will be repopulated optimistically on completion
+      invalidateCache(CACHE_KEY);
       setMigrationId(id);
     } catch (err) {
       setMigError(err.response?.data?.message || 'Failed to start migration');
@@ -202,221 +201,190 @@ export default function Variables() {
     }
   }
 
-  async function handleMigrateSpecific() {
-    if (!specificName.trim()) { setLookupError('Variable name is required'); return; }
-    setLookupError(''); setStarting(true); resetMigState();
-    try {
-      await variableApi.lookupVariable(specificName.trim(), specificFlow.trim());
-      const { migrationId: id } = await variableApi.startVariableMigration([
-        { variableName: specificName.trim(), integrationFlow: specificFlow.trim() },
-      ]);
-      invalidateCache(CACHE_KEY);
-      setMigrationId(id);
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to start migration';
-      if (err.response?.status === 404) setLookupError(msg);
-      else setMigError(msg);
-      setStarting(false);
-    }
-  }
-
   const migRunning = migStatus && !TERMINAL_STATUSES.includes(migStatus.migration?.STATUS);
   const canStart = !starting && !migRunning && hasTarget;
+  const isFiltering = Boolean(debouncedSearch.trim()) || statusFilter !== 'all';
+  const migratedCount = (variables || []).filter((v) =>
+    ['MIGRATED', 'SUCCESS', 'UPDATED'].includes(v.migrationStatus)
+  ).length;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <AppShell>
-      {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>
-          Variables{variables ? ` (${variables.length})` : ''}
-        </h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            className="btn btn-secondary"
-            onClick={() => { invalidateCache(CACHE_KEY); loadVariables(true); }}
-            disabled={refreshing}
-            title="Reload list from source tenant"
-            style={{ width: 'auto' }}
-          >
-            {refreshing ? '↻ Loading…' : '↻ Refresh'}
-          </button>
-          <button
-            className="btn"
-            disabled={!canStart || selectedKeys.size === 0}
-            onClick={handleMigrateSelected}
-          >
-            {starting ? 'Starting…' : `Migrate Selected (${selectedKeys.size})`}
-          </button>
-          <button
-            className="btn"
-            disabled={!canStart || !variables?.length}
-            onClick={handleMigrateAll}
-            title="Migrate all variables from source to target"
-          >
-            Migrate All
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Variables"
+        count={variables ? variables.length : undefined}
+        subtitle={
+          variables
+            ? `${migratedCount} of ${variables.length} migrated to the selected target tenant`
+            : 'Loading variables from the source tenant…'
+        }
+      >
+        <button
+          className="btn"
+          onClick={() => { invalidateCache(CACHE_KEY); loadVariables(true); }}
+          disabled={refreshing}
+          title="Reload list from source tenant"
+        >
+          {refreshing ? 'Refreshing…' : '↻ Refresh'}
+        </button>
+        <button
+          className="btn btn-primary"
+          disabled={!canStart || !variables?.length}
+          onClick={handleMigrateAll}
+          title="Migrate every variable from source to target"
+        >
+          {starting && !selectedKeys.size ? 'Starting…' : 'Migrate All'}
+        </button>
+      </PageHeader>
 
-      {/* ── Banners ────────────────────────────────────────────────────────── */}
       {!hasTarget && (
-        <div className="error-banner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="warn-banner">
           <span>No target tenant selected — migration is disabled.</span>
-          <Link to="/dashboard" style={{ color: 'inherit', fontWeight: 600, marginLeft: 16 }}>
-            Go to Dashboard →
-          </Link>
+          <Link to="/dashboard" style={{ color: 'inherit', fontWeight: 700 }}>Go to Dashboard →</Link>
         </div>
       )}
       {loadError && <div className="error-banner">{loadError}</div>}
       {migError && <div className="error-banner">{migError}</div>}
 
-      {/* ── Specific variable form ─────────────────────────────────────────── */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Migrate a Specific Variable</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label className="helper-text" style={{ margin: 0 }}>Variable Name *</label>
-            <input
-              className="input"
-              placeholder="e.g. MyVariable"
-              value={specificName}
-              onChange={(e) => { setSpecificName(e.target.value); setLookupError(''); }}
-              style={{ width: 200 }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label className="helper-text" style={{ margin: 0 }}>Integration Flow (empty = global)</label>
-            <input
-              className="input"
-              placeholder="e.g. MyFlow (or leave empty)"
-              value={specificFlow}
-              onChange={(e) => setSpecificFlow(e.target.value)}
-              style={{ width: 240 }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label className="helper-text" style={{ margin: 0 }}>&nbsp;</label>
-            <button className="btn" disabled={!canStart} onClick={handleMigrateSpecific}>
-              Migrate
-            </button>
+      {/* ── Variable list ─────────────────────────────────────────────────── */}
+      <div className="panel">
+        <div className="panel-head">
+          <h3 className="panel-title">Source Variables</h3>
+          <div className="panel-tools">
+            <StatusFilter value={statusFilter} onChange={setStatusFilter} />
+            <SearchField value={search} onChange={setSearch} placeholder="Filter variables…" />
           </div>
         </div>
-        {lookupError && (
-          <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 8 }}>{lookupError}</div>
-        )}
-      </div>
 
-      {/* ── Variable table ─────────────────────────────────────────────────── */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>Source Variables</h3>
-          <input
-            className="input"
-            placeholder="Filter variables…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 220 }}
-          />
-        </div>
-
-        {/* True first-load skeleton — only shown when variables is null (no cache hit) */}
+        {/* First-load skeleton — only when there was no cache hit */}
         {variables === null && !loadError && (
-          <table className="table" style={{ width: '100%' }}>
+          <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: 32 }} />
+                <th className="col-check" />
                 <th>Variable Name</th>
                 <th>Integration Flow</th>
                 <th>Visibility</th>
-                <th>Status</th>
+                <th className="col-status">Status</th>
               </tr>
             </thead>
-            <tbody>
-              <TableSkeleton rows={6} cols={4} hasCheckbox />
-            </tbody>
+            <tbody><TableSkeleton rows={6} cols={4} hasCheckbox /></tbody>
           </table>
         )}
 
         {variables !== null && visibleVariables.length === 0 && !loadError && (
-          <div className="empty-state">
-            No variables found{debouncedSearch ? ' matching filter' : ' on source tenant'}.
-          </div>
+          <EmptyState
+            title={isFiltering ? 'No matching variables' : 'No variables found'}
+            message={
+              isFiltering
+                ? 'No variables match your current search or status filter.'
+                : 'The selected source tenant has no variables defined.'
+            }
+            action={
+              isFiltering ? (
+                <button className="btn" onClick={() => { setSearch(''); setStatusFilter('all'); }}>
+                  Clear filters
+                </button>
+              ) : null
+            }
+          />
         )}
 
         {visibleVariables.length > 0 && (
-          <table className="table" style={{ width: '100%' }}>
-            <thead>
-              <tr>
-                <th style={{ width: 32 }}>
-                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} />
-                </th>
-                <th>Variable Name</th>
-                <th>Integration Flow</th>
-                <th>Visibility</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleVariables.map((v) => {
-                const k = varKey(v);
-                return (
-                  <tr
-                    key={k}
-                    onClick={() => toggleSelect(v)}
-                    style={{ cursor: 'pointer', background: selectedKeys.has(k) ? 'var(--surface-hover)' : undefined }}
-                  >
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedKeys.has(k)}
-                        onChange={() => toggleSelect(v)}
-                      />
-                    </td>
-                    <td className="mono" style={{ fontSize: 13 }}>{v.variableName}</td>
-                    <td style={{ fontSize: 13, color: v.integrationFlow ? undefined : 'var(--muted)' }}>
-                      {v.integrationFlow || '(global)'}
-                    </td>
-                    <td style={{ fontSize: 13 }}>{v.visibility || '—'}</td>
-                    <td>
-                      <MigrationStatusBadge
-                        status={v.migrationStatus}
-                        lastMigratedAt={v.lastMigratedAt}
-                        successLabel="✓ Migrated"
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th className="col-check">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all visible variables"
+                    />
+                  </th>
+                  <th>Variable Name</th>
+                  <th>Integration Flow</th>
+                  <th>Visibility</th>
+                  <th className="col-status">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleVariables.map((v) => {
+                  const k = varKey(v);
+                  const isSelected = selectedKeys.has(k);
+                  return (
+                    <tr
+                      key={k}
+                      className={`selectable${isSelected ? ' is-selected' : ''}`}
+                      onClick={() => toggleSelect(v)}
+                    >
+                      <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(v)} />
+                      </td>
+                      <td className="cell-name">{v.variableName}</td>
+                      <td className={v.integrationFlow ? '' : 'cell-muted'}>
+                        {v.integrationFlow || '(global)'}
+                      </td>
+                      <td className="cell-muted">{v.visibility || '—'}</td>
+                      <td className="col-status">
+                        <MigrationStatusBadge
+                          status={v.migrationStatus}
+                          lastMigratedAt={v.lastMigratedAt}
+                          successLabel="✓ Migrated"
+                          showIdle
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {visibleVariables.length > 0 && isFiltering && (
+          <div className="panel-foot">
+            Showing {visibleVariables.length} of {variables.length} variables
+          </div>
         )}
       </div>
 
-      {/* ── Migration status ──────────────────────────────────────────────── */}
+      <SelectionBar
+        count={selectedKeys.size}
+        onClear={() => setSelectedKeys(new Set())}
+        actionLabel={starting ? 'Starting…' : `Migrate ${selectedKeys.size} selected`}
+        onAction={handleMigrateSelected}
+        disabled={!canStart}
+      />
+
+      {/* ── Migration progress ────────────────────────────────────────────── */}
       {migStatus && (
-        <div style={{ marginBottom: 16 }}>
-          <h3 style={{ marginBottom: 8 }}>Migration Status</h3>
-          <MigrationProgress migration={migStatus.migration} artifacts={migStatus.artifacts} />
+        <div className="panel">
+          <div className="panel-head"><h3 className="panel-title">Migration Status</h3></div>
+          <div className="panel-body">
+            <MigrationProgress migration={migStatus.migration} artifacts={migStatus.artifacts} />
+          </div>
         </div>
       )}
 
       {migReport && (
-        <>
-          <h3 style={{ marginBottom: 8 }}>Migration Log</h3>
-          <MigrationLogViewer logs={migReport.logs} />
-          <div style={{ marginTop: 12 }}>
-            <Link to={`/migrations/${migrationId}`} style={{ fontSize: 13, color: 'var(--accent)' }}>
-              Open full migration report →
-            </Link>
+        <div className="panel">
+          <div className="panel-head">
+            <h3 className="panel-title">Migration Log</h3>
+            <div className="panel-tools">
+              <Link className="btn" to={`/migrations/${migrationId}`}>Open full report →</Link>
+            </div>
           </div>
-        </>
+          <div className="panel-body">
+            <MigrationLogViewer logs={migReport.logs} />
+          </div>
+        </div>
       )}
 
       {migRunning && (
-        <p className="helper-text" style={{ marginTop: 12 }}>
-          Migration in progress — this page updates automatically.
-        </p>
+        <p className="helper-text">Migration in progress — this page updates automatically.</p>
       )}
     </AppShell>
   );
