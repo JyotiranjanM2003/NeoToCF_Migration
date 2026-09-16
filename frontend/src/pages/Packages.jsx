@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import PackageTable from '../components/package/PackageTable.jsx';
+import TableSkeleton from '../components/common/TableSkeleton.jsx';
+import PageHeader from '../components/common/PageHeader.jsx';
+import SearchField from '../components/common/SearchField.jsx';
+import StatusFilter, { matchesStatusFilter } from '../components/common/StatusFilter.jsx';
+import EmptyState from '../components/common/EmptyState.jsx';
+import SelectionBar from '../components/common/SelectionBar.jsx';
 import useDebouncedValue from '../hooks/useDebouncedValue.js';
-import { getCache, setCache } from '../utils/resourceCache.js';
+import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as packageApi from '../services/api/package.api';
 import * as migrationApi from '../services/api/migration.api';
 
@@ -12,38 +18,52 @@ const PKG_CACHE_TTL = 5 * 60 * 1000;
 
 export default function Packages() {
   const navigate = useNavigate();
+
   const [packages, setPackages] = useState(() => getCache(PKG_CACHE_KEY) ?? null);
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [starting, setStarting] = useState(false);
   const [activeBatch, setActiveBatch] = useState(null);
+  const [activeMigration, setActiveMigration] = useState(null);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 180);
-  const [activeMigration, setActiveMigration] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  // ── Load (cache-first) ────────────────────────────────────────────────────
+  function loadPackages(force = false) {
+    if (!force) {
+      const cached = getCache(PKG_CACHE_KEY);
+      if (cached) { setPackages(cached); return; }
+    }
+    setRefreshing(true);
+    setError('');
+    packageApi
+      .listPackages()
+      .then((data) => {
+        setPackages(data.packages);
+        setCache(PKG_CACHE_KEY, data.packages, PKG_CACHE_TTL);
+      })
+      .catch((err) => {
+        const code = err.response?.data?.code;
+        if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
+          setError(err.response?.data?.message || 'Select a source tenant to browse packages.');
+          return;
+        }
+        setError(err.response?.data?.message || 'Failed to load packages');
+      })
+      .finally(() => setRefreshing(false));
+  }
 
   useEffect(() => {
-    const cached = getCache(PKG_CACHE_KEY);
-    if (!cached) {
-      packageApi
-        .listPackages()
-        .then((data) => {
-          setPackages(data.packages);
-          setCache(PKG_CACHE_KEY, data.packages, PKG_CACHE_TTL);
-        })
-        .catch((err) => {
-          const code = err.response?.data?.code;
-          if (code === 'NO_SOURCE_SELECTED' || code === 'SOURCE_NOT_CONNECTED') {
-            setError(err.response?.data?.message || 'Select a source tenant to browse packages.');
-            return;
-          }
-          setError(err.response?.data?.message || 'Failed to load packages');
-        });
-    }
+    if (!getCache(PKG_CACHE_KEY)) loadPackages(false);
 
     migrationApi.getActiveBatch().then((data) => setActiveBatch(data.batch)).catch(() => {});
     migrationApi.getActiveMigration().then((data) => setActiveMigration(data.migration)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Selection ─────────────────────────────────────────────────────────────
   function toggleSelect(packageId) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -53,39 +73,33 @@ export default function Packages() {
     });
   }
 
-  function selectAll() {
-    setSelectedIds(new Set((packages || []).map((p) => p.id)));
-  }
-
-  function deselectAll() {
-    setSelectedIds(new Set());
-  }
-
-  // Wires the table's header checkbox to the exact same selectedIds state —
-  // no new selection logic, just applied to whatever's currently visible
-  // under the search filter.
   function toggleSelectAll() {
-    const allVisibleSelected = visiblePackages.length > 0 && visiblePackages.every((p) => selectedIds.has(p.id));
-    if (allVisibleSelected) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        visiblePackages.forEach((p) => next.delete(p.id));
-        return next;
-      });
-    } else {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        visiblePackages.forEach((p) => next.add(p.id));
-        return next;
-      });
-    }
+    const allVisibleSelected =
+      visiblePackages.length > 0 && visiblePackages.every((p) => selectedIds.has(p.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visiblePackages.forEach((p) => next.delete(p.id));
+      else visiblePackages.forEach((p) => next.add(p.id));
+      return next;
+    });
   }
+
+  // Client-side filter only — selections survive typing a search term.
+  const visiblePackages = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return (packages || []).filter(
+      (p) =>
+        (p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)) &&
+        matchesStatusFilter(p, statusFilter)
+    );
+  }, [packages, debouncedSearch, statusFilter]);
 
   async function handleMigrateSelected() {
     setStarting(true);
     setError('');
     try {
       const { batchId } = await migrationApi.startBatchMigration(Array.from(selectedIds));
+      invalidateCache(PKG_CACHE_KEY);
       navigate(`/migrations/batch/${batchId}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to start migration');
@@ -93,93 +107,63 @@ export default function Packages() {
     }
   }
 
-  const selectedCount = selectedIds.size;
+  const isFiltering = Boolean(debouncedSearch.trim()) || statusFilter !== 'all';
+  const migratedCount = (packages || []).filter((p) =>
+    ['MIGRATED', 'SUCCESS', 'UPDATED'].includes(p.migrationStatus)
+  ).length;
 
-  // Client-side filter only — doesn't touch the packages state or selection
-  // logic, so selections made before typing a search term are preserved.
-  const visiblePackages = (packages || []).filter((p) =>
-    p.name.toLowerCase().includes(debouncedSearch.trim().toLowerCase())
-  );
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <AppShell>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 16,
-          flexWrap: 'wrap',
-          gap: 8,
-        }}
+      <PageHeader
+        title="Integration Packages"
+        count={packages ? packages.length : undefined}
+        subtitle={
+          packages
+            ? `${migratedCount} of ${packages.length} migrated to the selected target tenant`
+            : 'Loading packages from the source tenant…'
+        }
       >
-        <h2 style={{ margin: 0 }}>Integration Packages{packages ? ` (${packages.length})` : ''}</h2>
-        {packages && packages.length > 0 && (
-          <input
-            type="text"
-            placeholder="Search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              padding: '7px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              fontSize: 13,
-              width: 220,
-            }}
-          />
-        )}
-      </div>
-
-      {activeBatch && (
-        <div
-          className="card"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 16,
-            borderColor: 'var(--accent)',
-          }}
+        <button
+          className="btn"
+          onClick={() => { invalidateCache(PKG_CACHE_KEY); loadPackages(true); }}
+          disabled={refreshing}
+          title="Reload list from source tenant"
         >
+          {refreshing ? 'Refreshing…' : '↻ Refresh'}
+        </button>
+      </PageHeader>
+
+      {/* ── Resume banners ────────────────────────────────────────────────── */}
+      {activeBatch && (
+        <div className="note-banner" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <strong>A migration is still running.</strong>
             <div className="helper-text">Started {new Date(activeBatch.STARTEDAT).toLocaleString()}</div>
           </div>
           <button
             className="btn btn-primary"
-            style={{ width: 'auto' }}
             onClick={() => navigate(`/migrations/batch/${activeBatch.BATCHID}`)}
           >
-            Continue watching migration
+            Continue watching
           </button>
         </div>
       )}
 
       {activeMigration && (
-  <div
-    className="card"
-    style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 16,
-      borderColor: 'var(--accent)',
-    }}
-  >
-    <div>
-      <strong>A migration of "{activeMigration.PACKAGENAME}" is still running.</strong>
-      <div className="helper-text">Started {new Date(activeMigration.STARTEDAT).toLocaleString()}</div>
-    </div>
-    <button
-      className="btn btn-primary"
-      style={{ width: 'auto' }}
-      onClick={() => navigate(`/migrations/${activeMigration.MIGRATIONID}`)}
-    >
-      Continue watching migration
-    </button>
-  </div>
-)}
+        <div className="note-banner" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <strong>A migration of "{activeMigration.PACKAGENAME}" is still running.</strong>
+            <div className="helper-text">Started {new Date(activeMigration.STARTEDAT).toLocaleString()}</div>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => navigate(`/migrations/${activeMigration.MIGRATIONID}`)}
+          >
+            Continue watching
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="error-banner">
@@ -190,56 +174,73 @@ export default function Packages() {
         </div>
       )}
 
-      {!error && !packages && <div className="empty-state">Loading packages from source tenant…</div>}
-
-      {packages?.length === 0 && <div className="empty-state">No packages found on the source tenant.</div>}
-
-      {packages && packages.length > 0 && visiblePackages.length === 0 && (
-        <div className="empty-state">No packages match "{search}".</div>
-      )}
-
-      {visiblePackages.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: 16,
-            flexWrap: 'wrap',
-          }}
-        >
-          <button className="btn btn-secondary" onClick={selectAll}>
-            Select all
-          </button>
-          <button className="btn btn-secondary" onClick={deselectAll} disabled={selectedCount === 0}>
-            Deselect all
-          </button>
-          {selectedCount > 0 && (
-            <span className="badge badge-connected">
-              <span className="dot" />
-              {selectedCount} selected
-            </span>
-          )}
-          <div style={{ flex: 1 }} />
-          <button
-            className="btn btn-primary"
-            style={{ width: 'auto' }}
-            onClick={handleMigrateSelected}
-            disabled={selectedCount === 0 || starting}
-          >
-            {starting ? 'Starting…' : `Migrate selected packages (${selectedCount})`}
-          </button>
+      {/* ── Package list ──────────────────────────────────────────────────── */}
+      <div className="panel">
+        <div className="panel-head">
+          <h3 className="panel-title">Source Packages</h3>
+          <div className="panel-tools">
+            <StatusFilter value={statusFilter} onChange={setStatusFilter} />
+            <SearchField value={search} onChange={setSearch} placeholder="Filter packages…" />
+          </div>
         </div>
-      )}
 
-      {visiblePackages.length > 0 && (
-        <PackageTable
-          packages={visiblePackages}
-          selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
-          onToggleSelectAll={toggleSelectAll}
-        />
-      )}
+        {packages === null && !error && (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="col-check" />
+                <th>Name</th>
+                <th>Mode</th>
+                <th>Version</th>
+                <th>Description</th>
+                <th className="col-status">Status</th>
+              </tr>
+            </thead>
+            <tbody><TableSkeleton rows={6} cols={5} hasCheckbox /></tbody>
+          </table>
+        )}
+
+        {packages !== null && visiblePackages.length === 0 && !error && (
+          <EmptyState
+            title={isFiltering ? 'No matching packages' : 'No packages found'}
+            message={
+              isFiltering
+                ? 'No packages match your current search or status filter.'
+                : 'The selected source tenant has no integration packages.'
+            }
+            action={
+              isFiltering ? (
+                <button className="btn" onClick={() => { setSearch(''); setStatusFilter('all'); }}>
+                  Clear filters
+                </button>
+              ) : null
+            }
+          />
+        )}
+
+        {visiblePackages.length > 0 && (
+          <PackageTable
+            packages={visiblePackages}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
+          />
+        )}
+
+        {visiblePackages.length > 0 && isFiltering && (
+          <div className="panel-foot">
+            Showing {visiblePackages.length} of {packages.length} packages
+          </div>
+        )}
+      </div>
+
+      <SelectionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actionLabel={starting ? 'Starting…' : `Migrate ${selectedIds.size} selected`}
+        onAction={handleMigrateSelected}
+        disabled={starting}
+      />
     </AppShell>
   );
 }
