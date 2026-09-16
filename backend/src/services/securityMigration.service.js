@@ -269,13 +269,23 @@ async function start({ user, sourceTenant, targetTenant, targetCertificateAlias,
 }
 
 async function runPipeline({ migrationId, sourceTenant, category, type, targetCertificateAlias }) {
+  // const artifactId = await MigrationArtifactModel.create({
+  //   migrationId,
+  //   artifactId: type,
+  //   artifactName: category.label,
+  //   artifactType: 'SECURITY',
+  //   version: null,
+  // });
   const artifactId = await MigrationArtifactModel.create({
-    migrationId,
-    artifactId: type,
-    artifactName: category.label,
-    artifactType: 'SECURITY',
-    version: null,
-  });
+  migrationId,
+  // Stable per-category key, NOT the Type string posted to SAP — that
+  // string varies with sub-type selection, so it can't be used as the
+  // identity for "has this category already been migrated" lookups.
+  artifactId: category.key,
+  artifactName: category.label,
+  artifactType: 'SECURITY',
+  version: null,
+});
 
   await log(migrationId, STEPS.TRANSPORT, 'STARTED', `${category.label} → Type='${type}'`);
 

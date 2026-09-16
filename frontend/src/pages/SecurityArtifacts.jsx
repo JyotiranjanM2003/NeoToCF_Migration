@@ -4,6 +4,8 @@ import AppShell from '../components/layout/AppShell.jsx';
 import * as securityApi from '../services/api/securityMigration.api';
 import { CategoryIcon } from '../components/security/SecurityIcons.jsx';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
+import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
+
 
 const CATEGORIES_CACHE_KEY = 'security:categories';
 const CATEGORIES_CACHE_TTL = 5 * 60 * 1000; // 5 min
@@ -155,7 +157,12 @@ export default function SecurityArtifacts() {
                             <div style={{ fontSize: 32, fontWeight: 600, textAlign: 'right' }}>
                                 {cat.countLabel ? (cat.count ?? '—') : ''}
                             </div>
-                            {cat.countLabel && <span className="helper-text">{cat.countLabel}</span>}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                {cat.countLabel ? <span className="helper-text">{cat.countLabel}</span> : <span />}
+                                {cat.migrationStatus && (
+                                    <MigrationStatusBadge status={cat.migrationStatus} lastMigratedAt={cat.lastMigratedAt} successLabel="✓ Migrated" />
+                                )}
+                            </div>
                         </div>
                     ))}
                 </div>

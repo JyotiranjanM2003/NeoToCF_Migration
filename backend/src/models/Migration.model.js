@@ -160,6 +160,10 @@ function latestStatusByNumberRangeForTargetHost(targetHost) {
   return _latestArtifactStatusForTargetHost(targetHost, 'NUMBER_RANGE');
 }
 
+function latestStatusBySecurityForTargetHost(targetHost) {
+  return _latestArtifactStatusForTargetHost(targetHost, 'SECURITY');
+}
+
 async function listBySourceTenant(sourceTenantId) {
   return query(`SELECT * FROM ${TABLE} WHERE SourceTenantId = ?`, [sourceTenantId]);
 }
@@ -194,5 +198,6 @@ module.exports = {
   latestStatusByVariableForTargetHost,
   latestStatusByDataStoreForTargetHost,
   latestStatusByNumberRangeForTargetHost,
+  latestStatusBySecurityForTargetHost,
   listBySourceTenant, listByTargetTenant, deleteById, findActiveForUser
 };

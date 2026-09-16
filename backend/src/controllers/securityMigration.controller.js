@@ -1,28 +1,86 @@
 const tenantSelection = require('../services/tenantSelection.service');
 const securityMigrationService = require('../services/securityMigration.service');
+const MigrationModel = require('../models/Migration.model');
+
 
 /** GET /api/security-artifacts/categories */
+// async function listCategories(req, res, next) {
+//   try {
+//     const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+//     if (!sourceTenant) {
+//       return res.status(400).json({ code: 'NO_SOURCE_SELECTED', message: 'No source tenant selected. Please select a source tenant first.' });
+//     }
+//     res.json({ categories: await securityMigrationService.listCategories(sourceTenant) });
+//   } catch (err) {
+//     next(err);
+//   }
+// }
 async function listCategories(req, res, next) {
   try {
-    const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+    const { sourceTenant, targetTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
     if (!sourceTenant) {
       return res.status(400).json({ code: 'NO_SOURCE_SELECTED', message: 'No source tenant selected. Please select a source tenant first.' });
     }
-    res.json({ categories: await securityMigrationService.listCategories(sourceTenant) });
+
+    const [categories, statusRows] = await Promise.all([
+      securityMigrationService.listCategories(sourceTenant),
+      targetTenant
+        ? MigrationModel.latestStatusBySecurityForTargetHost(targetTenant.HOST)
+        : Promise.resolve([]),
+    ]);
+
+    const statusMap = new Map(statusRows.map((row) => [row.ARTIFACTID, row]));
+
+    const enriched = categories.map((cat) => {
+      const record = statusMap.get(cat.key);
+      return {
+        ...cat,
+        migrationStatus: record ? record.STATUS : null,
+        lastMigratedAt: record ? record.COMPLETEDAT || record.STARTEDAT : null,
+      };
+    });
+
+    res.json({ categories: enriched });
   } catch (err) {
     next(err);
   }
 }
 
 /** GET /api/security-artifacts/categories/:categoryKey/entries */
+// async function listCategoryEntries(req, res, next) {
+//   try {
+//     const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+//     if (!sourceTenant) {
+//       return res.status(400).json({ code: 'NO_SOURCE_SELECTED', message: 'No source tenant selected. Please select a source tenant first.' });
+//     }
+//     const result = await securityMigrationService.listCategoryEntries(sourceTenant, req.params.categoryKey);
+//     if (!result) return res.status(404).json({ message: 'Unknown security category' });
+//     res.json(result);
+//   } catch (err) {
+//     next(err);
+//   }
+// }
+
 async function listCategoryEntries(req, res, next) {
   try {
-    const { sourceTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
+    const { sourceTenant, targetTenant } = await tenantSelection.getSelectedTenants(req.user.userId);
     if (!sourceTenant) {
       return res.status(400).json({ code: 'NO_SOURCE_SELECTED', message: 'No source tenant selected. Please select a source tenant first.' });
     }
+
     const result = await securityMigrationService.listCategoryEntries(sourceTenant, req.params.categoryKey);
     if (!result) return res.status(404).json({ message: 'Unknown security category' });
+
+    if (targetTenant) {
+      const statusRows = await MigrationModel.latestStatusBySecurityForTargetHost(targetTenant.HOST);
+      const record = statusRows.find((row) => row.ARTIFACTID === result.key);
+      result.migrationStatus = record ? record.STATUS : null;
+      result.lastMigratedAt = record ? record.COMPLETEDAT || record.STARTEDAT : null;
+    } else {
+      result.migrationStatus = null;
+      result.lastMigratedAt = null;
+    }
+
     res.json(result);
   } catch (err) {
     next(err);

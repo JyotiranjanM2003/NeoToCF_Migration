@@ -7,6 +7,9 @@ import * as securityApi from '../services/api/securityMigration.api';
 import { SECURITY_ALIAS_STORAGE_KEY } from './SecurityArtifacts.jsx';
 import { SubTypeIcon } from '../components/security/SecurityIcons.jsx';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
+import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
+
+
 
 const ENTRIES_CACHE_TTL = 5 * 60 * 1000; // 5 min
 const CATEGORIES_CACHE_KEY = 'security:categories';
@@ -129,12 +132,35 @@ export default function SecurityArtifactCategory() {
 
     return (
         <AppShell>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+            {/* <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
                 <div>
                     <h2 style={{ margin: 0 }}>{data?.label || 'Security Artifacts'}</h2>
                     <p className="helper-text" style={{ margin: '4px 0 0' }}>
                         <Link to="/security">← Manage Security</Link>
                     </p>
+                </div>
+                {data?.entries?.length > 0 && (
+                    <input
+                        className="input"
+                        placeholder="Search…"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        style={{ width: 220 }}
+                    />
+                )}
+            </div> */}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div>
+                        <h2 style={{ margin: 0 }}>{data?.label || 'Security Artifacts'}</h2>
+                        <p className="helper-text" style={{ margin: '4px 0 0' }}>
+                            <Link to="/security">← Manage Security</Link>
+                        </p>
+                    </div>
+                    {data?.migrationStatus && (
+                        <MigrationStatusBadge status={data.migrationStatus} lastMigratedAt={data.lastMigratedAt} successLabel="✓ Migrated" />
+                    )}
                 </div>
                 {data?.entries?.length > 0 && (
                     <input
@@ -228,7 +254,7 @@ export default function SecurityArtifactCategory() {
                     </div>
 
                     <div style={{ overflowX: 'auto' }}>
-                       <table className="table simple-table" style={{ width: '100%' }}>
+                        <table className="table simple-table" style={{ width: '100%' }}>
                             {/* <thead>
                 <tr>
                   <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} /></th>
