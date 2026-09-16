@@ -5,6 +5,10 @@ import PageHeader from '../components/common/PageHeader.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import * as securityApi from '../services/api/securityMigration.api';
 import { CategoryIcon } from '../components/security/SecurityIcons.jsx';
+import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
+
+const CATEGORIES_CACHE_KEY = 'security:categories';
+const CATEGORIES_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
 export const SECURITY_ALIAS_STORAGE_KEY = 'securityTargetCertAlias';
 
@@ -24,6 +28,7 @@ export default function SecurityArtifacts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifiedAlias]);
 
+<<<<<<< HEAD
   function loadCategories() {
     setCategories(null);
     setCategoriesError('');
@@ -35,16 +40,56 @@ export default function SecurityArtifacts() {
         if (code === 'NO_SOURCE_SELECTED') {
           setCategoriesError(err.response.data.message);
           return;
+=======
+    function loadCategories() {
+        // Serve from cache if still fresh
+        const cached = getCache(CATEGORIES_CACHE_KEY);
+        if (cached) {
+            setCategories(cached);
+            return;
+        }
+        setCategories(null);
+        setCategoriesError('');
+        securityApi
+            .listCategories()
+            .then((data) => {
+                setCategories(data.categories);
+                setCache(CATEGORIES_CACHE_KEY, data.categories, CATEGORIES_CACHE_TTL);
+            })
+            .catch((err) => {
+                const code = err.response?.data?.code;
+                if (code === 'NO_SOURCE_SELECTED') {
+                    setCategoriesError(err.response.data.message);
+                    return;
+                }
+                setCategoriesError(err.response?.data?.message || 'Failed to load Security Artifacts');
+            });
+    }
+
+    async function handleVerify(event) {
+        event.preventDefault();
+        if (!alias.trim()) {
+            setVerifyError('Enter a target certificate alias');
+            return;
+>>>>>>> origin
         }
         setCategoriesError(err.response?.data?.message || 'Failed to load Security Artifacts');
       });
   }
 
+<<<<<<< HEAD
   async function handleVerify(event) {
     event.preventDefault();
     if (!alias.trim()) {
       setVerifyError('Enter a target certificate alias');
       return;
+=======
+    function handleChangeAlias() {
+        sessionStorage.removeItem(SECURITY_ALIAS_STORAGE_KEY);
+        invalidateCache(CATEGORIES_CACHE_KEY);
+        setVerifiedAlias('');
+        setCategories(null);
+>>>>>>> origin
     }
     setVerifying(true);
     setVerifyError('');

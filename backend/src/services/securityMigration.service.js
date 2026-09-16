@@ -73,9 +73,8 @@ async function fetchEntityCount(sourceTenant, entity) {
   try {
     const data = await neoClient.get(sourceTenant, `/${entity}`);
     return (data?.d?.results || []).length;
-  } catch (err) {
-    console.error(`[securityMigration] fetchEntityCount failed for entity '${entity}':`, err.response?.status, err.response?.data || err.message);
-    return null;
+  } catch {
+    return null; // entity not available on this tenant — degrade gracefully
   }
 }
 
@@ -89,18 +88,34 @@ async function listCategories(sourceTenant) {
         label: category.label,
         countLabel: category.countLabel,
         supported: category.supported,
+        noListing: category.noListing || false,
         count: category.supported ? null : 0,
       });
       continue;
     }
 
+    // Fetch all source entities and deduplicate by name (most-specific source wins)
+    // so the tile count matches the SAP Neo UI which de-dupes cross-type entries.
+    const seenNames = new Set();
     let total = 0;
     let anyOk = false;
     for (const source of category.listSources) {
-      const count = await fetchEntityCount(sourceTenant, source.entity);
-      if (count !== null) {
-        total += count;
+      try {
+        const data = await neoClient.get(sourceTenant, `/${source.entity}`);
+        const rows = data?.d?.results || [];
+        for (const row of rows) {
+          const name = row.Name ?? row.Alias ?? row.Id;
+          if (name !== undefined && seenNames.has(name)) {
+            // Duplicate — this name already counted from a previous source.
+            // The previous source wins (lower priority overwritten by higher below).
+            continue;
+          }
+          if (name !== undefined) seenNames.add(name);
+          total++;
+        }
         anyOk = true;
+      } catch (err) {
+        console.error(`[securityMigration] fetchEntityCount failed for entity '${source.entity}':`, err.response?.status, err.response?.data || err.message);
       }
     }
     results.push({
@@ -123,13 +138,18 @@ async function listCategoryEntries(sourceTenant, categoryKey) {
     return { key: category.key, label: category.label, supported: false, transportType: null, subTypes: [], entries: [] };
   }
 
-  const entries = [];
+  // Collect entries across all source entities.
+  // An entry's Name might appear in multiple entity sets (e.g. SF_Cred in both
+  // UserCredentials and OAuth2SAMLBearerAssertion). We collect all sources first,
+  // then deduplicate by name — keeping the LAST (most-specific) occurrence so
+  // the displayed type matches the SAP Neo Security Material UI.
+  const rawEntries = [];
   for (const source of category.listSources) {
     try {
       const data = await neoClient.get(sourceTenant, `/${source.entity}`);
       const rows = data?.d?.results || [];
       rows.forEach((row, idx) => {
-        entries.push({
+        rawEntries.push({
           id: `${source.subTypeKey}::${row.Name ?? row.Alias ?? row.Id ?? idx}`,
           name: row.Name ?? row.Alias ?? row.Id ?? `${source.subTypeLabel} #${idx + 1}`,
           subTypeKey: source.subTypeKey,
@@ -137,15 +157,23 @@ async function listCategoryEntries(sourceTenant, categoryKey) {
           detail: row.Description ?? row.Type ?? row.KeyType ?? row.ValidNotAfter ?? '',
         });
       });
-    } catch (err) {
+    } catch {
       // Entity not available on this tenant/plan — skip it, don't fail the page.
     }
   }
+
+  // Deduplicate by name: later (more-specific) sources overwrite earlier ones.
+  const byName = new Map();
+  for (const entry of rawEntries) {
+    byName.set(entry.name, entry);
+  }
+  const entries = Array.from(byName.values());
 
   return {
     key: category.key,
     label: category.label,
     supported: true,
+    noListing: category.noListing || false,
     transportType: category.transportType,
     subTypes: category.listSources.map((s) => ({ key: s.subTypeKey, label: s.subTypeLabel })),
     entries,
