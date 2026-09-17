@@ -60,77 +60,71 @@ function buildTransportType(category, subTypeKeys) {
 
 // ─── Listing (review UI only) ────────────────────────────────────────────────
 
-async function fetchEntityCount(sourceTenant, entity) {
-  try {
-    const data = await neoClient.get(sourceTenant, `/${entity}`);
-    return (data?.d?.results || []).length;
-  } catch (err) {
-    logger.error('securityMigration.fetchEntityCount failed', {
-      entity,
-      status: err.response?.status,
-      detail: err.response?.data || err.message,
-    });
-    return null; // entity not exposed on this tenant/plan — degrade gracefully
-  }
-}
+/**
+ * Maps the SAP CPI `Type` field (returned on each UserCredentials row) to
+ * the human-readable label shown in the CPI Security Material UI.
+ * SAP's UserCredentials OData endpoint returns ALL credential types mixed
+ * together (User Credentials, OAuth2 SAML Bearer, SSH Known Hosts, etc.).
+ * Reading row.Type and looking it up here gives the correct display label.
+ */
+const SAP_TYPE_MAP = {
+  userCredentials:           'User Credentials',
+  oauth2SamlBearerAssertion: 'OAuth2 SAML Bearer Assertion',
+  oauth2AuthorizationCode:   'OAuth2 Authorization Code',
+  sshKnownHosts:             'SSH Known Hosts',
+  oAuth2ClientCredentials:   'OAuth2 Client Credentials',
+  oauth2ClientCredentials:   'OAuth2 Client Credentials',
+  secureParameter:           'Secure Parameter',
+};
 
 /**
  * Tile grid data for the Manage Security landing page.
  *
- * Each supported category needs a count per sub-type (e.g. "Security
- * Material" alone has 6 listSources), and every count is one live OData
- * call to the source tenant. Awaiting them one at a time — as this used
- * to — made a single request to this endpoint take 1-2.5s. The reads are
- * fully independent of each other, so Promise.all fans them all out at
- * once instead; total latency drops to roughly the slowest single call.
+ * Uses a Set per category to deduplicate entries by Name across all entity
+ * sources — SAP's UserCredentials endpoint returns ALL credential types
+ * (including OAuth2 Client Credentials), so naive summation would
+ * double-count entries that appear in both entity sets.
  */
 async function listCategories(sourceTenant) {
-  const countPromises = [];
-  const countIndexByCategory = new Map(); // category.key -> [index into countPromises, ...]
-
-  for (const category of SECURITY_CATEGORIES) {
-    if (!category.supported || category.listSources.length === 0) continue;
-
-    const indices = [];
-    for (const source of category.listSources) {
-      indices.push(countPromises.length);
-      countPromises.push(fetchEntityCount(sourceTenant, source.entity));
-    }
-    countIndexByCategory.set(category.key, indices);
-  }
-
-  const counts = await Promise.all(countPromises);
-
-  return SECURITY_CATEGORIES.map((category) => {
-    if (!category.supported || category.listSources.length === 0) {
-      return {
-        key: category.key,
-        label: category.label,
-        countLabel: category.countLabel,
-        supported: category.supported,
-        count: category.supported ? null : 0,
-      };
-    }
-
-    const indices = countIndexByCategory.get(category.key) || [];
-    let total = 0;
-    let anyOk = false;
-    for (const i of indices) {
-      const count = counts[i];
-      if (count !== null) {
-        total += count;
-        anyOk = true;
+  const results = await Promise.all(
+    SECURITY_CATEGORIES.map(async (category) => {
+      if (!category.supported || category.listSources.length === 0) {
+        return { key: category.key, count: category.supported ? null : 0 };
       }
-    }
 
-    return {
-      key: category.key,
-      label: category.label,
-      countLabel: category.countLabel,
-      supported: true,
-      count: anyOk ? total : null,
-    };
-  });
+      const fetches = await Promise.allSettled(
+        category.listSources.map((source) =>
+          neoClient.get(sourceTenant, `/${source.entity}`).then((data) => data?.d?.results || [])
+        )
+      );
+
+      // Use a Set of Names to count UNIQUE entries across all entity sources.
+      const seen = new Set();
+      let anyOk = false;
+      for (const fetch of fetches) {
+        if (fetch.status !== 'fulfilled') continue;
+        anyOk = true;
+        for (const row of fetch.value) {
+          const name = row.Name ?? row.Alias ?? row.Id;
+          // Named entries are deduplicated by name; unnamed entries each get a
+          // unique Symbol so they are always counted but never deduplicated.
+          seen.add(name !== undefined && name !== null ? name : Symbol());
+        }
+      }
+
+      return { key: category.key, count: anyOk ? seen.size : null };
+    })
+  );
+
+  const countMap = new Map(results.map((r) => [r.key, r.count]));
+
+  return SECURITY_CATEGORIES.map((category) => ({
+    key: category.key,
+    label: category.label,
+    countLabel: category.countLabel,
+    supported: category.supported,
+    count: countMap.get(category.key) ?? (category.supported ? null : 0),
+  }));
 }
 
 /** Row-level entries for one tile's "select all / custom select" table. */
@@ -142,23 +136,42 @@ async function listCategoryEntries(sourceTenant, categoryKey) {
     return { key: category.key, label: category.label, supported: false, transportType: null, subTypes: [], entries: [] };
   }
 
-  const entries = [];
-  for (const source of category.listSources) {
-    try {
-      const data = await neoClient.get(sourceTenant, `/${source.entity}`);
-      const rows = data?.d?.results || [];
-      rows.forEach((row, idx) => {
-        entries.push({
-          id: `${source.subTypeKey}::${row.Name ?? row.Alias ?? row.Id ?? idx}`,
-          name: row.Name ?? row.Alias ?? row.Id ?? `${source.subTypeLabel} #${idx + 1}`,
-          subTypeKey: source.subTypeKey,
-          subTypeLabel: source.subTypeLabel,
-          detail: row.Description ?? row.Type ?? row.KeyType ?? row.ValidNotAfter ?? '',
-        });
+  // Fetch all entity sources in parallel.
+  const fetchResults = await Promise.allSettled(
+    category.listSources.map((source) =>
+      neoClient.get(sourceTenant, `/${source.entity}`).then((data) => ({ source, rows: data?.d?.results || [] }))
+    )
+  );
+
+  // Use a Map keyed by Name to deduplicate across entity sources.
+  // listSources are ordered: UserCredentials first, OAuth2ClientCredentials second.
+  // When the OAuth2ClientCredentials source is processed it OVERWRITES the
+  // same-named entry that was already added from UserCredentials — giving that
+  // entry the correct "OAuth2 Client Credentials" type label instead of
+  // "User Credentials" (SAP's UserCredentials endpoint returns ALL types mixed).
+  const entryMap = new Map();
+
+  for (const result of fetchResults) {
+    if (result.status !== 'fulfilled') continue;
+    const { source, rows } = result.value;
+
+    rows.forEach((row, idx) => {
+      const name = row.Name ?? row.Alias ?? row.Id ?? `${source.subTypeLabel} #${idx + 1}`;
+
+      // Look up the actual SAP type string from the row to get the correct label.
+      // SAP returns e.g. "oauth2SamlBearerAssertion" in row.Type for entries that
+      // appear inside the UserCredentials list but are a different credential type.
+      const sapType = row.Type || null;
+      const displayLabel = (sapType && SAP_TYPE_MAP[sapType]) || source.subTypeLabel;
+
+      entryMap.set(name, {
+        id: `${source.subTypeKey}::${name}`,
+        name,
+        subTypeKey: source.subTypeKey,
+        subTypeLabel: displayLabel,
+        detail: row.Description ?? '',
       });
-    } catch (err) {
-      // Entity not available on this tenant/plan — skip it, don't fail the page.
-    }
+    });
   }
 
   return {
@@ -167,7 +180,7 @@ async function listCategoryEntries(sourceTenant, categoryKey) {
     supported: true,
     transportType: category.transportType,
     subTypes: category.listSources.map((s) => ({ key: s.subTypeKey, label: s.subTypeLabel })),
-    entries,
+    entries: [...entryMap.values()],
   };
 }
 

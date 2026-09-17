@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getCache, setCache } from '../utils/resourceCache.js';
+import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as tenantApi from '../services/api/tenant.api';
 import * as packageApi from '../services/api/package.api';
 import * as datastoreApi from '../services/api/datastoreMigration.api';
@@ -26,6 +26,8 @@ export const CONTENT_TYPES = [
 
 const MIGRATED = ['MIGRATED', 'SUCCESS', 'UPDATED'];
 const TTL = 3 * 60 * 1000;
+const TENANT_CACHE_KEY = 'tenants';
+const TENANT_TTL = 2 * 60 * 1000; // 2 minutes — short so connection-state stays fresh
 
 function tally(rows) {
   const list = rows || [];
@@ -70,34 +72,41 @@ export function readCachedCounts() {
  * dashboard costs nothing.
  */
 export default function useConsoleSummary() {
-  const [tenants, setTenants] = useState({ source: null, target: null, loaded: false });
+  const [tenants, setTenants] = useState(() => getCache(TENANT_CACHE_KEY) ?? { source: null, target: null, loaded: false });
   const [counts, setCounts] = useState(() => readCachedCounts());
   const [report, setReport] = useState(() => getCache('migration-report'));
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!getCache(TENANT_CACHE_KEY));
   const [error, setError] = useState('');
 
   const load = useCallback(async (force = false) => {
-    setLoading(true);
     setError('');
 
-    // ── Tenants (never cached — connection state must always be live) ──
-    try {
-      const [sourceData, targetData] = await Promise.all([
-        tenantApi.listSourceTenants(),
-        tenantApi.listTargetTenants(),
-      ]);
-      setTenants({
-        source: (sourceData.tenants || []).find((t) => t.selected) || null,
-        target: (targetData.tenants || []).find((t) => t.selected) || null,
-        sourceAll: sourceData.tenants || [],
-        targetAll: targetData.tenants || [],
-        loaded: true,
-      });
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load tenants');
-      setTenants((prev) => ({ ...prev, loaded: true }));
-      setLoading(false);
-      return;
+    // ── Tenants (cache-first, 2-min TTL) ──────────────────────────────────
+    const cachedTenants = !force && getCache(TENANT_CACHE_KEY);
+    if (cachedTenants) {
+      setTenants(cachedTenants);
+    } else {
+      setLoading(true);
+      try {
+        const [sourceData, targetData] = await Promise.all([
+          tenantApi.listSourceTenants(),
+          tenantApi.listTargetTenants(),
+        ]);
+        const freshTenants = {
+          source: (sourceData.tenants || []).find((t) => t.selected) || null,
+          target: (targetData.tenants || []).find((t) => t.selected) || null,
+          sourceAll: sourceData.tenants || [],
+          targetAll: targetData.tenants || [],
+          loaded: true,
+        };
+        setCache(TENANT_CACHE_KEY, freshTenants, TENANT_TTL);
+        setTenants(freshTenants);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load tenants');
+        setTenants((prev) => ({ ...prev, loaded: true }));
+        setLoading(false);
+        return;
+      }
     }
 
     // ── Content lists (cache-first, failures are non-fatal) ──
@@ -147,5 +156,5 @@ export default function useConsoleSummary() {
     load(false);
   }, [load]);
 
-  return { tenants, counts, report, loading, error, reload: () => load(true) };
+  return { tenants, counts, report, loading, error, reload: () => { invalidateCache(TENANT_CACHE_KEY); return load(true); } };
 }
