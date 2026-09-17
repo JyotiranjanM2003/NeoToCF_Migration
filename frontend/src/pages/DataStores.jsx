@@ -265,7 +265,7 @@ export default function DataStores() {
       {loadError && <div className="error-banner">{loadError}</div>}
       {migError && <div className="error-banner">{migError}</div>}
 
-      {/* ── Specific data store form ───────────────────────────────────────── */}
+      {/* ── Specific data store form ─────────────────────────────────────────
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, marginBottom: 12 }}>Migrate a Specific Data Store</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -309,7 +309,7 @@ export default function DataStores() {
         {lookupError && (
           <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 8 }}>{lookupError}</div>
         )}
-      </div>
+      </div> */}
 
       {/* ── Data store table ───────────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 16 }}>

@@ -20,6 +20,7 @@
 
 const neoClient = require('./neoClient.service');
 const cfClient = require('./cfClient.service');
+const logger = require('../utils/logger');
 
 const MigrationModel = require('../models/Migration.model');
 const MigrationArtifactModel = require('../models/MigrationArtifact.model');
@@ -59,74 +60,77 @@ function buildTransportType(category, subTypeKeys) {
 
 // ─── Listing (review UI only) ────────────────────────────────────────────────
 
-// async function fetchEntityCount(sourceTenant, entity) {
-//   try {
-//     const data = await neoClient.get(sourceTenant, `/${entity}`);
-//     return (data?.d?.results || []).length;
-//   } catch (err) {
-//     return null; // entity not exposed on this tenant/plan — degrade gracefully
-//   }
-// }
-
-// in fetchEntityCount
 async function fetchEntityCount(sourceTenant, entity) {
   try {
     const data = await neoClient.get(sourceTenant, `/${entity}`);
     return (data?.d?.results || []).length;
-  } catch {
-    return null; // entity not available on this tenant — degrade gracefully
+  } catch (err) {
+    logger.error('securityMigration.fetchEntityCount failed', {
+      entity,
+      status: err.response?.status,
+      detail: err.response?.data || err.message,
+    });
+    return null; // entity not exposed on this tenant/plan — degrade gracefully
   }
 }
 
-/** Tile grid data for the Manage Security landing page. */
+/**
+ * Tile grid data for the Manage Security landing page.
+ *
+ * Each supported category needs a count per sub-type (e.g. "Security
+ * Material" alone has 6 listSources), and every count is one live OData
+ * call to the source tenant. Awaiting them one at a time — as this used
+ * to — made a single request to this endpoint take 1-2.5s. The reads are
+ * fully independent of each other, so Promise.all fans them all out at
+ * once instead; total latency drops to roughly the slowest single call.
+ */
 async function listCategories(sourceTenant) {
-  const results = [];
+  const countPromises = [];
+  const countIndexByCategory = new Map(); // category.key -> [index into countPromises, ...]
+
   for (const category of SECURITY_CATEGORIES) {
+    if (!category.supported || category.listSources.length === 0) continue;
+
+    const indices = [];
+    for (const source of category.listSources) {
+      indices.push(countPromises.length);
+      countPromises.push(fetchEntityCount(sourceTenant, source.entity));
+    }
+    countIndexByCategory.set(category.key, indices);
+  }
+
+  const counts = await Promise.all(countPromises);
+
+  return SECURITY_CATEGORIES.map((category) => {
     if (!category.supported || category.listSources.length === 0) {
-      results.push({
+      return {
         key: category.key,
         label: category.label,
         countLabel: category.countLabel,
         supported: category.supported,
-        noListing: category.noListing || false,
         count: category.supported ? null : 0,
-      });
-      continue;
+      };
     }
 
-    // Fetch all source entities and deduplicate by name (most-specific source wins)
-    // so the tile count matches the SAP Neo UI which de-dupes cross-type entries.
-    const seenNames = new Set();
+    const indices = countIndexByCategory.get(category.key) || [];
     let total = 0;
     let anyOk = false;
-    for (const source of category.listSources) {
-      try {
-        const data = await neoClient.get(sourceTenant, `/${source.entity}`);
-        const rows = data?.d?.results || [];
-        for (const row of rows) {
-          const name = row.Name ?? row.Alias ?? row.Id;
-          if (name !== undefined && seenNames.has(name)) {
-            // Duplicate — this name already counted from a previous source.
-            // The previous source wins (lower priority overwritten by higher below).
-            continue;
-          }
-          if (name !== undefined) seenNames.add(name);
-          total++;
-        }
+    for (const i of indices) {
+      const count = counts[i];
+      if (count !== null) {
+        total += count;
         anyOk = true;
-      } catch (err) {
-        console.error(`[securityMigration] fetchEntityCount failed for entity '${source.entity}':`, err.response?.status, err.response?.data || err.message);
       }
     }
-    results.push({
+
+    return {
       key: category.key,
       label: category.label,
       countLabel: category.countLabel,
       supported: true,
       count: anyOk ? total : null,
-    });
-  }
-  return results;
+    };
+  });
 }
 
 /** Row-level entries for one tile's "select all / custom select" table. */
@@ -138,18 +142,13 @@ async function listCategoryEntries(sourceTenant, categoryKey) {
     return { key: category.key, label: category.label, supported: false, transportType: null, subTypes: [], entries: [] };
   }
 
-  // Collect entries across all source entities.
-  // An entry's Name might appear in multiple entity sets (e.g. SF_Cred in both
-  // UserCredentials and OAuth2SAMLBearerAssertion). We collect all sources first,
-  // then deduplicate by name — keeping the LAST (most-specific) occurrence so
-  // the displayed type matches the SAP Neo Security Material UI.
-  const rawEntries = [];
+  const entries = [];
   for (const source of category.listSources) {
     try {
       const data = await neoClient.get(sourceTenant, `/${source.entity}`);
       const rows = data?.d?.results || [];
       rows.forEach((row, idx) => {
-        rawEntries.push({
+        entries.push({
           id: `${source.subTypeKey}::${row.Name ?? row.Alias ?? row.Id ?? idx}`,
           name: row.Name ?? row.Alias ?? row.Id ?? `${source.subTypeLabel} #${idx + 1}`,
           subTypeKey: source.subTypeKey,
@@ -157,23 +156,15 @@ async function listCategoryEntries(sourceTenant, categoryKey) {
           detail: row.Description ?? row.Type ?? row.KeyType ?? row.ValidNotAfter ?? '',
         });
       });
-    } catch {
+    } catch (err) {
       // Entity not available on this tenant/plan — skip it, don't fail the page.
     }
   }
-
-  // Deduplicate by name: later (more-specific) sources overwrite earlier ones.
-  const byName = new Map();
-  for (const entry of rawEntries) {
-    byName.set(entry.name, entry);
-  }
-  const entries = Array.from(byName.values());
 
   return {
     key: category.key,
     label: category.label,
     supported: true,
-    noListing: category.noListing || false,
     transportType: category.transportType,
     subTypes: category.listSources.map((s) => ({ key: s.subTypeKey, label: s.subTypeLabel })),
     entries,
@@ -269,23 +260,13 @@ async function start({ user, sourceTenant, targetTenant, targetCertificateAlias,
 }
 
 async function runPipeline({ migrationId, sourceTenant, category, type, targetCertificateAlias }) {
-  // const artifactId = await MigrationArtifactModel.create({
-  //   migrationId,
-  //   artifactId: type,
-  //   artifactName: category.label,
-  //   artifactType: 'SECURITY',
-  //   version: null,
-  // });
   const artifactId = await MigrationArtifactModel.create({
-  migrationId,
-  // Stable per-category key, NOT the Type string posted to SAP — that
-  // string varies with sub-type selection, so it can't be used as the
-  // identity for "has this category already been migrated" lookups.
-  artifactId: category.key,
-  artifactName: category.label,
-  artifactType: 'SECURITY',
-  version: null,
-});
+    migrationId,
+    artifactId: type,
+    artifactName: category.label,
+    artifactType: 'SECURITY',
+    version: null,
+  });
 
   await log(migrationId, STEPS.TRANSPORT, 'STARTED', `${category.label} → Type='${type}'`);
 

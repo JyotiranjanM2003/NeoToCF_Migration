@@ -46,22 +46,40 @@ async function fetchXsrfToken(tenant, accessToken) {
   };
 }
 
+// One in-flight session-fetch promise per tenant, so N concurrent calls on a
+// cold/expired cache (e.g. Promise.all-ed reads in securityMigration.service)
+// share a single OAuth+XSRF round trip instead of each firing their own.
+const inFlightSessions = new Map();
+
 /**
  * Ensures a valid, cached OAuth + XSRF token pair for this source tenant.
  * Re-fetches automatically when missing or close to expiry.
  */
 async function ensureSession(tenant) {
-  const cached = tokenCache.get(`source:${tenant.SOURCETENANTID}`);
+  const cacheKey = `source:${tenant.SOURCETENANTID}`;
+  const cached = tokenCache.get(cacheKey);
   if (cached && !tokenCache.isExpired(cached)) {
     return cached;
   }
 
-  const { accessToken, expiresAt } = await fetchOAuthToken(tenant);
-  const { xsrfToken, cookies } = await fetchXsrfToken(tenant, accessToken);
+  const existing = inFlightSessions.get(cacheKey);
+  if (existing) return existing;
 
-  const session = { accessToken, expiresAt, xsrfToken, cookies };
-  tokenCache.set(`source:${tenant.SOURCETENANTID}`, session);
-  return session;
+  const fetchPromise = (async () => {
+    try {
+      const { accessToken, expiresAt } = await fetchOAuthToken(tenant);
+      const { xsrfToken, cookies } = await fetchXsrfToken(tenant, accessToken);
+
+      const session = { accessToken, expiresAt, xsrfToken, cookies };
+      tokenCache.set(cacheKey, session);
+      return session;
+    } finally {
+      inFlightSessions.delete(cacheKey);
+    }
+  })();
+
+  inFlightSessions.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 /** Quick connectivity test used by the "Connect Source" screen. */
