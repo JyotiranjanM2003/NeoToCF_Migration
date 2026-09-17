@@ -92,7 +92,7 @@ async function refresh(req, res, next) {
 }
 
 async function logout(req, res) {
-  res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict' });
+  res.clearCookie('refreshToken', refreshCookieOptions());
   res.status(204).send();
 }
 
@@ -106,13 +106,28 @@ async function me(req, res, next) {
   }
 }
 
-function setRefreshCookie(res, token) {
-  res.cookie('refreshToken', token, {
+/**
+ * Frontend and backend are deployed as separate Cloud Foundry apps under
+ * *.cfapps.<region>.hana.ondemand.com, which browsers treat as different
+ * "sites" (not just different origins) — the same isolation reasoning as
+ * *.herokuapp.com or *.github.io. A cookie needed on a cross-site XHR must
+ * be SameSite=None, and SameSite=None requires Secure=true or Chrome drops
+ * it outright. Locally (http://localhost), Secure must stay false or the
+ * browser won't set the cookie over plain HTTP at all — hence the
+ * IS_PRODUCTION branch rather than hardcoding either value.
+ */
+function refreshCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction,
     maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  };
+}
+
+function setRefreshCookie(res, token) {
+  res.cookie('refreshToken', token, refreshCookieOptions());
 }
 
 module.exports = { signup, login, refresh, logout, me };

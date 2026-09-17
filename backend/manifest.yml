@@ -1,0 +1,24 @@
+---
+applications:
+  - name: neo-cf-migration-backend
+    path: .
+    buildpacks:
+      - nodejs_buildpack
+    instances: 1
+    memory: 512M
+    routes:
+      - route: neo-cf-migration-backend.cfapps.eu10-004.hana.ondemand.com
+    env:
+      # Non-secret only. Secrets (HANA_PASSWORD, JWT_*_SECRET,
+      # TENANT_SECRET_ENC_KEY) are set with `cf set-env` below instead of
+      # here, so they never end up committed to git.
+      NODE_ENV: production
+      CLIENT_ORIGIN: https://neo-cf-migration-frontend.cfapps.eu10-004.hana.ondemand.com
+      HANA_HOST: c6217cff-ccbd-4e82-8ad6-27cdc04d02a0.hna0.prod-eu10.hanacloud.ondemand.com
+      HANA_PORT: 443
+      HANA_USER: INTEGRATION-DEV
+      HANA_SCHEMA: INTEGRATION-DEV
+      HANA_ENCRYPT: true
+      HANA_SSL_VALIDATE_CERT: true
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
