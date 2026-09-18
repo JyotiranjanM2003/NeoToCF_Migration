@@ -1,6 +1,11 @@
+// import React, { useState } from 'react';
+// import { Link, useNavigate } from 'react-router-dom';
+// import { useAuth } from '../context/AuthContext.jsx';
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import PasswordInput from '../components/common/PasswordInput.jsx';
 
 export default function Login() {
   const { login } = useAuth();
@@ -46,16 +51,32 @@ export default function Login() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </div>
+
+
           <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
+            <div className="field-label-row">
+              <label htmlFor="password">Password</label>
+              <Link to="/forgot-password" className="field-inline-link">Forgot password?</Link>
+            </div>
+            <PasswordInput
               id="password"
-              type="password"
               required
+              autoComplete="current-password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
           </div>
+
+          {/* <div className="field">
+            <label htmlFor="password">Password</label>
+            <PasswordInput
+              id="password"
+              required
+              autoComplete="current-password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div> */}
           <button className="btn btn-primary" type="submit" disabled={submitting}>
             {submitting ? 'Logging in…' : 'Log in'}
           </button>

@@ -17,7 +17,7 @@
  * switching tenants never serves stale data from a previous tenant.
  */
 
-const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 const store = new Map(); // key → { data, expiresAt }
 

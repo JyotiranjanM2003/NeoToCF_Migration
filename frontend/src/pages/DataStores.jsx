@@ -8,9 +8,11 @@ import useDebouncedValue from '../hooks/useDebouncedValue.js';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as datastoreApi from '../services/api/datastoreMigration.api';
 import * as migrationApi from '../services/api/migration.api';
+import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
+
 
 const DS_CACHE_KEY = 'datastores';
-const DS_CACHE_TTL = 3 * 60 * 1000;
+const DS_CACHE_TTL = 15 * 60 * 1000;
 
 const TERMINAL_STATUSES = ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'];
 const POLL_INTERVAL_MS = 2500;
@@ -92,6 +94,7 @@ export default function DataStores() {
           if (!cancelled) {
             setMigReport(full);
             setStarting(false);
+            applyMigrationOutcomes(data.artifacts);
           }
         } else {
           pollRef.current = setTimeout(poll, POLL_INTERVAL_MS);
@@ -110,6 +113,33 @@ export default function DataStores() {
       clearTimeout(pollRef.current);
     };
   }, [migrationId]);
+
+
+  /**
+ * Patch per-data-store outcomes into state + cache so the Status column
+ * updates as soon as the run finishes, without a re-fetch.
+ */
+  function applyMigrationOutcomes(artifacts) {
+    if (!artifacts?.length) return;
+
+    const outcomeMap = {};
+    for (const a of artifacts) {
+      outcomeMap[a.ARTIFACTID] = {
+        migrationStatus: a.STATUS,
+        lastMigratedAt: a.COMPLETEDAT || a.STARTEDAT || new Date().toISOString(),
+      };
+    }
+
+    setDataStores((prev) => {
+      if (!prev) return prev;
+      const next = prev.map((d) => {
+        const key = `${d.dataStoreName}::${d.integrationFlow}`;
+        return outcomeMap[key] ? { ...d, ...outcomeMap[key] } : d;
+      });
+      setCache(DS_CACHE_KEY, next, DS_CACHE_TTL);
+      return next;
+    });
+  }
 
   // ── Selection helpers ─────────────────────────────────────────────────────
   function dsKey(d) {
@@ -325,9 +355,9 @@ export default function DataStores() {
         </div>
 
         {dataStores === null && !loadError && (
-          <table className="table" style={{ width: '100%' }}>
-            <thead><tr><th style={{ width: 32 }} /><th>Data Store Name</th><th>Integration Flow</th><th>Type</th><th>Entries</th></tr></thead>
-            <tbody><TableSkeleton rows={6} cols={4} hasCheckbox /></tbody>
+          <table className="table datastore-table" style={{ width: '100%' }}>
+            <thead><tr><th style={{ width: 32 }} /><th>Data Store Name</th><th>Integration Flow</th><th>Type</th><th>Entries</th><th>Status</th></tr></thead>
+            <tbody><TableSkeleton rows={6} cols={5} hasCheckbox /></tbody>
           </table>
         )}
 
@@ -338,7 +368,7 @@ export default function DataStores() {
         )}
 
         {visibleDataStores.length > 0 && (
-          <table className="table" style={{ width: '100%' }}>
+          <table className="table datastore-table" style={{ width: '100%' }}>
             <thead>
               <tr>
                 <th>
@@ -352,6 +382,7 @@ export default function DataStores() {
                 <th>Integration Flow</th>
                 <th>Type</th>
                 <th>Entries</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -376,6 +407,14 @@ export default function DataStores() {
                     </td>
                     <td style={{ fontSize: 13 }}>{d.type || '—'}</td>
                     <td style={{ fontSize: 13 }}>{d.totalEntries ?? '—'}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <MigrationStatusBadge
+                        status={d.migrationStatus}
+                        lastMigratedAt={d.lastMigratedAt}
+                        successLabel="✓ Migrated"
+                        showIdle
+                      />
+                    </td>
                   </tr>
                 );
               })}
@@ -415,29 +454,29 @@ export default function DataStores() {
 
       {/* ── Duplicate-migration warning popup ────────────────────────────── */}
       {duplicateWarning && (
-  <div
-    style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0,0,0,0.4)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}
-  >
-    <div className="card" style={{ maxWidth: 340, width: '90%', padding: 20, textAlign: 'center' }}>
-      <p style={{ fontSize: 14, margin: '0 0 16px 0' }}>
-        {duplicateWarning.duplicates.length === 1
-          ? `"${duplicateWarning.duplicates[0].dataStoreName}" is already migrated.`
-          : `${duplicateWarning.duplicates.length} selected data stores are already migrated.`}
-      </p>
-      <button className="btn" onClick={() => setDuplicateWarning(null)}>
-        OK
-      </button>
-    </div>
-  </div>
-)}
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div className="card" style={{ maxWidth: 340, width: '90%', padding: 20, textAlign: 'center' }}>
+            <p style={{ fontSize: 14, margin: '0 0 16px 0' }}>
+              {duplicateWarning.duplicates.length === 1
+                ? `"${duplicateWarning.duplicates[0].dataStoreName}" is already migrated.`
+                : `${duplicateWarning.duplicates.length} selected data stores are already migrated.`}
+            </p>
+            <button className="btn" onClick={() => setDuplicateWarning(null)}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

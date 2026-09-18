@@ -8,7 +8,7 @@ import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as migrationReportApi from '../services/api/migrationReport.api';
 
 const REPORT_CACHE_KEY = 'migration-report';
-const REPORT_CACHE_TTL = 2 * 60 * 1000;
+const REPORT_CACHE_TTL = 15* 60 * 1000;
 
 const STATUS_CARDS = [
     { key: 'MIGRATED', label: 'Migrated', className: 'report-stat-success' },

@@ -14,7 +14,7 @@ import * as packageApi from '../services/api/package.api';
 import * as migrationApi from '../services/api/migration.api';
 
 const PKG_CACHE_KEY = 'packages';
-const PKG_CACHE_TTL = 5 * 60 * 1000;
+const PKG_CACHE_TTL = 15 * 60 * 1000;
 
 export default function Packages() {
   const navigate = useNavigate();

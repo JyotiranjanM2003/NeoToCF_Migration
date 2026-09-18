@@ -18,7 +18,7 @@ import * as migrationApi from '../services/api/migration.api';
 const TERMINAL_STATUSES = ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'];
 const POLL_INTERVAL_MS = 2500;
 const CACHE_KEY = 'variables';
-const CACHE_TTL_MS = 3 * 60 * 1000;
+const CACHE_TTL_MS = 15 * 60 * 1000;
 
 export default function Variables() {
   // ── List state ────────────────────────────────────────────────────────────

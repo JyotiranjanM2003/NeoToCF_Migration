@@ -12,7 +12,7 @@ import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as numberRangeApi from '../services/api/numberRange.api';
 
 const NR_CACHE_KEY = 'numberranges';
-const NR_CACHE_TTL = 5 * 60 * 1000;
+const NR_CACHE_TTL = 15 * 60 * 1000;
 
 const resultLabels = {
   migrated: 'Migrated successfully',

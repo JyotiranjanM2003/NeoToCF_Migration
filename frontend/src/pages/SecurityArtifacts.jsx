@@ -9,7 +9,7 @@ import { CategoryIcon } from '../components/security/SecurityIcons.jsx';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 
 const CATEGORIES_CACHE_KEY = 'security:categories';
-const CATEGORIES_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const CATEGORIES_CACHE_TTL = 15 * 60 * 1000; // 5 min
 
 export const SECURITY_ALIAS_STORAGE_KEY = 'securityTargetCertAlias';
 

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import PasswordInput from '../components/common/PasswordInput.jsx';
+
+
 
 export default function SignUp() {
   const { signup } = useAuth();
@@ -50,13 +53,26 @@ export default function SignUp() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </div>
-          <div className="field">
+          {/* <div className="field">
             <label htmlFor="password">Password</label>
             <input
               id="password"
               type="password"
               required
               minLength={8}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+            <div className="helper-text">At least 8 characters.</div>
+          </div> */}
+
+          <div className="field">
+            <label htmlFor="password">Password</label>
+            <PasswordInput
+              id="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />

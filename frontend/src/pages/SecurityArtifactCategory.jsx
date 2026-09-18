@@ -12,7 +12,7 @@ import { SECURITY_ALIAS_STORAGE_KEY } from './SecurityArtifacts.jsx';
 import { SubTypeIcon } from '../components/security/SecurityIcons.jsx';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 
-const ENTRIES_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const ENTRIES_CACHE_TTL = 15 * 60 * 1000; // 5 min
 const entriesCacheKey = (key) => `security:entries:${key}`;
 
 export default function SecurityArtifactCategory() {

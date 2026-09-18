@@ -178,3 +178,21 @@ UPDATE DATASTORE_OPERATION d
    SET TargetHost = (SELECT Host FROM TARGET_TENANT t WHERE t.TargetTenantId = d.TargetTenantId),
        SourceHost = (SELECT Host FROM SOURCE_TENANT s WHERE s.SourceTenantId = d.SourceTenantId)
  WHERE d.TargetHost IS NULL;
+
+
+ -- ========== PASSWORD RESET TOKEN ==========
+-- Stores only a SHA-256 hash of the reset token that was emailed to the
+-- user, never the raw token, mirroring how PasswordHash never stores a
+-- plaintext password.
+CREATE TABLE PASSWORD_RESET_TOKEN (
+    Id              NVARCHAR(36)  PRIMARY KEY,
+    UserId          NVARCHAR(36)  NOT NULL REFERENCES APP_USER(UserId),
+    TokenHash       NVARCHAR(64)  NOT NULL,
+    ExpiresAt       TIMESTAMP     NOT NULL,
+    Used            TINYINT       DEFAULT 0,
+    CreatedAt       TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    RequestIp       NVARCHAR(100)
+);
+
+CREATE INDEX IDX_PRT_TOKENHASH ON PASSWORD_RESET_TOKEN (TokenHash);
+CREATE INDEX IDX_PRT_USER ON PASSWORD_RESET_TOKEN (UserId);

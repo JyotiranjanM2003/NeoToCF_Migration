@@ -27,4 +27,11 @@ async function touchLastLogin(userId) {
   await query(`UPDATE ${TABLE} SET LastLoginAt = CURRENT_TIMESTAMP WHERE UserId = ?`, [userId]);
 }
 
-module.exports = { createUser, findByEmail, findById, touchLastLogin };
+//module.exports = { createUser, findByEmail, findById, touchLastLogin };
+// ADD this function (e.g. right after touchLastLogin):
+async function updatePasswordHash(userId, passwordHash) {
+  await query(`UPDATE ${TABLE} SET PasswordHash = ? WHERE UserId = ?`, [passwordHash, userId]);
+}
+
+// REPLACE the existing export line:
+module.exports = { createUser, findByEmail, findById, touchLastLogin, updatePasswordHash };

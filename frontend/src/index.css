@@ -267,6 +267,77 @@ a:focus-visible {
   margin-bottom: 16px;
 }
 
+.success-banner {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* ---------- password field with eye toggle ---------- */
+.password-input-wrap {
+  position: relative;
+}
+
+.password-input-wrap input {
+  width: 100%;
+  padding: 9px 38px 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: var(--font-body);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.password-input-wrap input:focus {
+  border-color: var(--accent);
+}
+
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.password-toggle-btn:hover {
+  color: var(--ink);
+}
+
+/* ---------- inline label-row link (e.g. "Forgot password?") ---------- */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.field-label-row label {
+  margin-bottom: 0;
+}
+
+.field-inline-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.field-inline-link:hover {
+  text-decoration: underline;
+}
+
 /* ---------- status badges ---------- */
 .badge {
   display: inline-flex;

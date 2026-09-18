@@ -19,3 +19,15 @@ export function me() {
 export function refresh() {
   return client.post('/auth/refresh').then((r) => r.data);
 }
+
+export function forgotPassword(email) {
+  return client.post('/auth/forgot-password', { email }).then((r) => r.data);
+}
+
+export function validateResetToken(token) {
+  return client.get(`/auth/reset-password/${token}/validate`).then((r) => r.data);
+}
+
+export function resetPassword({ token, password }) {
+  return client.post('/auth/reset-password', { token, password }).then((r) => r.data);
+}
