@@ -9,6 +9,22 @@ const logger = require('../utils/logger');
 const poolParams = {
   poolSize: 10,
   connectTimeout: 15000,
+  /*
+   * How long (ms) a connection can sit idle in the pool before it is
+   * proactively closed and replaced.  Set below HANA's own idle-timeout
+   * (default 600 s = 10 min) so the pool never hands out a stale connection.
+   */
+  idleTimeout: 300000,          // 5 minutes
+  /*
+   * Automatically re-establish a connection when it is found to be broken
+   * on checkout.
+   */
+  reconnect: true,
+  /*
+   * Ping the server before returning a connection from the pool.
+   * Adds a tiny round-trip but eliminates "connection not connected" errors.
+   */
+  pingCheck: true,
 };
 
 const connParams = {

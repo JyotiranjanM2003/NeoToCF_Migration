@@ -5,6 +5,7 @@ import TableSkeleton from '../components/common/TableSkeleton.jsx';
 import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
 import useDebouncedValue from '../hooks/useDebouncedValue.js';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
+import { formatIndiaDateTime } from '../utils/dateTime.js';
 import * as migrationReportApi from '../services/api/migrationReport.api';
 
 const REPORT_CACHE_KEY = 'migration-report';
@@ -168,7 +169,7 @@ export default function MigrationReportPage() {
                                                 <MigrationStatusBadge status={row.status} lastMigratedAt={row.completedAt || row.startedAt} successLabel="✓ Migrated" />
                                             </td>
                                             <td style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
-                                                {row.completedAt || row.startedAt ? new Date(row.completedAt || row.startedAt).toLocaleString() : '—'}
+                                                {formatIndiaDateTime(row.completedAt || row.startedAt)}
                                             </td>
                                         </tr>
                                     ))}

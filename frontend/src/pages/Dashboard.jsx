@@ -4,6 +4,7 @@ import AppShell from '../components/layout/AppShell.jsx';
 import MigrationStatusBadge from '../components/package/MigrationStatusBadge.jsx';
 import useConsoleSummary, { CONTENT_TYPES } from '../hooks/useConsoleSummary.js';
 import { SECURITY_ALIAS_STORAGE_KEY } from './SecurityArtifacts.jsx';
+import { formatIndiaDateTime } from '../utils/dateTime.js';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -83,7 +84,7 @@ export default function Dashboard() {
           <div className="stat-kicker">Last activity</div>
           <div className="stat-value stat-value-sm">
             {lastRun
-              ? new Date(lastRun.completedAt || lastRun.startedAt).toLocaleString(undefined, {
+              ? formatIndiaDateTime(lastRun.completedAt || lastRun.startedAt, {
                   day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
                 })
               : 'No runs yet'}
@@ -181,7 +182,7 @@ export default function Dashboard() {
                     <span className="run-name">{run.name}</span>
                     <span className="run-sub">
                       {run.category} ·{' '}
-                      {new Date(run.completedAt || run.startedAt).toLocaleString(undefined, {
+                      {formatIndiaDateTime(run.completedAt || run.startedAt, {
                         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
                       })}
                     </span>

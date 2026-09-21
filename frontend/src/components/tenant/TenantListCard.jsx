@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import StatusBadge from './StatusBadge.jsx';
+import { formatIndiaDateTime } from '../../utils/dateTime.js';
 
 export default function TenantListCard({ tenant, onReconfigure, onSelect, onDelete, selecting, deleting }) {
   const [confirming, setConfirming] = useState(false);
@@ -27,7 +28,7 @@ export default function TenantListCard({ tenant, onReconfigure, onSelect, onDele
           </div>
           <div className="helper-text mono">{tenant.host}</div>
           {tenant.lastTestedAt && (
-            <div className="helper-text">Last tested {new Date(tenant.lastTestedAt).toLocaleString()}</div>
+            <div className="helper-text">Last tested {formatIndiaDateTime(tenant.lastTestedAt)}</div>
           )}
         </div>
         <StatusBadge status={tenant.connectionStatus} />

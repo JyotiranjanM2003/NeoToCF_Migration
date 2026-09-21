@@ -73,6 +73,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import TenantConnectForm from '../components/tenant/TenantConnectForm.jsx';
 import * as tenantApi from '../services/api/tenant.api';
+import { invalidateCache } from '../utils/resourceCache';
 
 const FIELDS = [
   { name: 'tenantName', label: 'Tenant name', placeholder: 'CF Prod', required: false },
@@ -135,7 +136,8 @@ export default function ConnectTargetTenant() {
         : await tenantApi.createTargetTenant(values);
       setResult({ ok: res.connectionStatus === 'CONNECTED', message: res.message });
       if (res.connectionStatus === 'CONNECTED') {
-        setTimeout(() => navigate('/dashboard'), 900);
+        invalidateCache('tenants'); // force the tenant list to re-fetch on next load
+        setTimeout(() => navigate('/tenants'), 900);
       }
     } catch (err) {
       setResult({ ok: false, message: err.response?.data?.message || 'Connection failed' });

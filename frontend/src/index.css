@@ -1233,6 +1233,7 @@ a:focus-visible {
   gap: 4px;
   text-align: left;
   font-family: var(--font-body);
+  color: var(--ink);
   cursor: pointer;
   transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s;
 }
@@ -1260,6 +1261,7 @@ a:focus-visible {
   letter-spacing: -0.02em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 .tile-label {
   font-size: 11px;

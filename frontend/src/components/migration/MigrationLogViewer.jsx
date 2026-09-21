@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatIndiaTime } from '../../utils/dateTime.js';
 
 const STATUS_COLOR = {
   STARTED: 'var(--ink-muted)',
@@ -27,7 +28,7 @@ export default function MigrationLogViewer({ logs }) {
           }}
         >
           <span style={{ color: 'var(--ink-muted)', minWidth: 80, flexShrink: 0 }}>
-            {new Date(l.TIMESTAMP).toLocaleTimeString()}
+            {formatIndiaTime(l.TIMESTAMP)}
           </span>
           <span style={{ minWidth: 220, flexShrink: 0, fontWeight: 600 }}>{l.STEP}</span>
           <span style={{ color: STATUS_COLOR[l.STATUS] || 'var(--ink)', minWidth: 70, flexShrink: 0 }}>{l.STATUS}</span>

@@ -7,9 +7,10 @@
 const MigrationReportModel = require('../models/MigrationReport.model');
 
 // The overall migration run itself is only meaningful as its own report
-// row for scopes that represent "a package" — everything else is fully
-// represented by its MIGRATION_ARTIFACT rows.
-const PACKAGE_RUN_SCOPES = new Set(['PACKAGE', 'SINGLE_ARTIFACT']);
+// row for whole-package runs. SINGLE_ARTIFACT runs are fully represented
+// by their MIGRATION_ARTIFACT row — adding a separate "Package" row for
+// them just produces a duplicate/confusing entry in the report.
+const PACKAGE_RUN_SCOPES = new Set(['PACKAGE']);
 
 const ARTIFACT_CATEGORY_LABELS = {
   PACKAGE: 'Package Artifact',

@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatIndiaDateTime } from '../../utils/dateTime.js';
 
 const BASE_CONFIG = {
   SUCCESS:  { className: 'badge-connected',    label: 'Migrated' },
@@ -40,7 +41,7 @@ export default function MigrationStatusBadge({ status, lastMigratedAt, successLa
   return (
     <span
       className={`badge ${base.className}`}
-      title={lastMigratedAt ? `Last run ${new Date(lastMigratedAt).toLocaleString()}` : undefined}
+      title={lastMigratedAt ? `Last run ${formatIndiaDateTime(lastMigratedAt)}` : undefined}
     >
       <span className="dot" />
       {label}

@@ -104,10 +104,12 @@ export default function SecurityArtifacts() {
           </div>
           <div className="panel-body">
             <p className="helper-text" style={{ marginTop: 0, lineHeight: 1.6 }}>
-              SAP encrypts Security Content transports with a certificate held in the target
-              tenant&apos;s Keystore. Enter that certificate&apos;s alias — this is the same{' '}
-              <span className="mono">targetCertificateAlias</span> variable used by the
-              &quot;CPI MIG090 Security Artifacts&quot; Postman collection.
+              Before continuing, upload the Cloud Foundry tenant&apos;s
+<span className="mono"> sap_cloudintegrationcertificate </span>
+to the Neo tenant keystore. Enter the alias assigned to this imported certificate
+(for example, <span className="mono">cf_transport</span>). This value is
+case-sensitive and must match the <span className="mono">targetCertificateAlias</span>
+used by the “CPI MIG090 Security Artifacts” Postman collection.
             </p>
 
             <form onSubmit={handleVerify}>

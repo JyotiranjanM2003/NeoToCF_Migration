@@ -4,6 +4,7 @@ import AppShell from '../components/layout/AppShell.jsx';
 import MigrationProgress from '../components/migration/MigrationProgress.jsx';
 import MigrationLogViewer from '../components/migration/MigrationLogViewer.jsx';
 import * as migrationApi from '../services/api/migration.api';
+import { formatIndiaDateTime } from '../utils/dateTime.js';
 
 const TERMINAL_STATUSES = ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'];
 const POLL_INTERVAL_MS = 2000;
@@ -74,8 +75,8 @@ export default function BatchMigrationReport() {
             </span>
           </div>
           <div className="helper-text">
-            Started {new Date(status.batch.STARTEDAT).toLocaleString()}
-            {status.batch.COMPLETEDAT && ` · Completed ${new Date(status.batch.COMPLETEDAT).toLocaleString()}`}
+            Started {formatIndiaDateTime(status.batch.STARTEDAT)}
+            {status.batch.COMPLETEDAT && ` · Completed ${formatIndiaDateTime(status.batch.COMPLETEDAT)}`}
           </div>
         </div>
       )}

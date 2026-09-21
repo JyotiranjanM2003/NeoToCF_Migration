@@ -12,6 +12,7 @@ import useDebouncedValue from '../hooks/useDebouncedValue.js';
 import { getCache, setCache, invalidateCache } from '../utils/resourceCache.js';
 import * as packageApi from '../services/api/package.api';
 import * as migrationApi from '../services/api/migration.api';
+import { formatIndiaDateTime } from '../utils/dateTime.js';
 
 const PKG_CACHE_KEY = 'packages';
 const PKG_CACHE_TTL = 15 * 60 * 1000;
@@ -139,7 +140,7 @@ export default function Packages() {
         <div className="note-banner" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <strong>A migration is still running.</strong>
-            <div className="helper-text">Started {new Date(activeBatch.STARTEDAT).toLocaleString()}</div>
+            <div className="helper-text">Started {formatIndiaDateTime(activeBatch.STARTEDAT)}</div>
           </div>
           <button
             className="btn btn-primary"
@@ -154,7 +155,7 @@ export default function Packages() {
         <div className="note-banner" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <strong>A migration of "{activeMigration.PACKAGENAME}" is still running.</strong>
-            <div className="helper-text">Started {new Date(activeMigration.STARTEDAT).toLocaleString()}</div>
+            <div className="helper-text">Started {formatIndiaDateTime(activeMigration.STARTEDAT)}</div>
           </div>
           <button
             className="btn btn-primary"

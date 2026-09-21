@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatIndiaDateTime } from '../../utils/dateTime.js';
 
 const STATUS_BADGE = {
   PENDING: 'badge-disconnected',
@@ -24,8 +25,8 @@ export default function MigrationProgress({ migration, artifacts }) {
         </span>
       </h3>
       <p className="helper-text" style={{ marginBottom: 16 }}>
-        Started {new Date(migration.STARTEDAT).toLocaleString()}
-        {migration.COMPLETEDAT && ` · Completed ${new Date(migration.COMPLETEDAT).toLocaleString()}`}
+        Started {formatIndiaDateTime(migration.STARTEDAT)}
+        {migration.COMPLETEDAT && ` · Completed ${formatIndiaDateTime(migration.COMPLETEDAT)}`}
       </p>
 
             {artifacts?.map((a) => (
