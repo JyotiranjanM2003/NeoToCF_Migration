@@ -16,11 +16,32 @@ const TABLE = 'MIGRATION';
 
 async function create({ userId, sourceTenantId, targetTenantId, sourceHost, targetHost, packageName, scopeType, batchId = null }) {
   const migrationId = uuidv4();
+
+  // Guard: if sourceHost/targetHost weren't passed in (undefined/null), look
+  // them up from the tenant tables so the columns are never written as NULL.
+  // This makes every call site resilient to a missing property on the tenant
+  // object regardless of how the tenant was fetched.
+  let resolvedSourceHost = sourceHost || null;
+  let resolvedTargetHost = targetHost || null;
+
+  if (!resolvedSourceHost || !resolvedTargetHost) {
+    const lookups = await Promise.all([
+      !resolvedSourceHost
+        ? query(`SELECT Host FROM SOURCE_TENANT WHERE SourceTenantId = ?`, [sourceTenantId])
+        : Promise.resolve([]),
+      !resolvedTargetHost
+        ? query(`SELECT Host FROM TARGET_TENANT WHERE TargetTenantId = ?`, [targetTenantId])
+        : Promise.resolve([]),
+    ]);
+    if (!resolvedSourceHost && lookups[0][0]) resolvedSourceHost = lookups[0][0].HOST;
+    if (!resolvedTargetHost && lookups[1][0]) resolvedTargetHost = lookups[1][0].HOST;
+  }
+
   await query(
     `INSERT INTO ${TABLE}
        (MigrationId, UserId, SourceTenantId, TargetTenantId, SourceHost, TargetHost, PackageName, ScopeType, Status, StartedAt, BatchId)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'RUNNING', CURRENT_TIMESTAMP, ?)`,
-    [migrationId, userId, sourceTenantId, targetTenantId, sourceHost, targetHost, packageName, scopeType, batchId]
+    [migrationId, userId, sourceTenantId, targetTenantId, resolvedSourceHost, resolvedTargetHost, packageName, scopeType, batchId]
   );
   return migrationId;
 }
@@ -93,47 +114,100 @@ async function listForBatch(batchId, userId) {
 //   );
 // }
 /**
- * Latest migration status per package for THIS TARGET HOST, across ALL
- * users — not just the caller. Reads directly off MIGRATION.TargetHost,
- * which is set at migration-start time regardless of who ran it.
+ * Latest per-artifact migration status for every artifact inside a given
+ * package, for a specific target host. Covers both SINGLE_ARTIFACT runs
+ * (user migrated individual iFlows) and PACKAGE runs (whole package was
+ * migrated at once). The most recent attempt per ArtifactId wins.
+ *
+ * Used to enrich the PackageDetail artifact list with MIGRATED / FAILED /
+ * NOT MIGRATED per row instead of the source tenant's Active/Draft status.
  */
-async function latestStatusByPackageForTargetHost(targetHost) {
+/**
+ * Latest per-artifact migration status for every artifact inside a given
+ * package, scoped by the real source/target tenant hostnames so results are
+ * shared across all users pointing at the same real tenant pair.
+ */
+async function latestArtifactStatusByPackageForTenantPair(sourceHost, targetHost, packageName) {
+  return query(
+    `SELECT ma.ArtifactId, ma.ArtifactName, ma.Status, ma.ErrorMessage,
+            m.StartedAt, m.CompletedAt
+     FROM (
+       SELECT ma2.ArtifactId, ma2.ArtifactName, ma2.Status, ma2.ErrorMessage, ma2.MigrationId,
+              ROW_NUMBER() OVER (
+                PARTITION BY ma2.ArtifactId
+                ORDER BY m2.StartedAt DESC
+              ) AS rn
+       FROM MIGRATION_ARTIFACT ma2
+       INNER JOIN MIGRATION m2 ON m2.MigrationId = ma2.MigrationId
+       WHERE m2.SourceHost = ?
+         AND m2.TargetHost = ?
+         AND m2.PackageName = ?
+         AND m2.ScopeType IN ('SINGLE_ARTIFACT', 'PACKAGE')
+     ) ma
+     INNER JOIN MIGRATION m ON m.MigrationId = ma.MigrationId
+     WHERE ma.rn = 1`,
+    [sourceHost, targetHost, packageName]
+  );
+}
+
+/**
+ * Latest whole-package migration status per package for this source/target
+ * host pair, across ALL users — shared view of what has been migrated to
+ * this real target tenant.
+ */
+async function latestStatusByPackageForTenantPair(sourceHost, targetHost) {
   return query(
     `SELECT PackageName, Status, StartedAt, CompletedAt FROM (
        SELECT PackageName, Status, StartedAt, CompletedAt,
               ROW_NUMBER() OVER (PARTITION BY PackageName ORDER BY StartedAt DESC) AS RowNum
        FROM ${TABLE}
-       WHERE TargetHost = ? AND ScopeType = 'PACKAGE'
+       WHERE SourceHost = ?
+         AND TargetHost = ?
+         AND ScopeType = 'PACKAGE'
      ) ranked
      WHERE RowNum = 1`,
-    [targetHost]
+    [sourceHost, targetHost]
   );
 }
 
-// async function latestStatusByVariableForTargetHost(targetHost) {
-//   return query(
-//     `SELECT ma.ArtifactId, ma.ArtifactName, ma.Status, ma.StartedAt, ma.CompletedAt
-//      FROM (
-//        SELECT ma2.ArtifactId, ma2.ArtifactName, ma2.Status, m2.StartedAt, m2.CompletedAt,
-//               ROW_NUMBER() OVER (PARTITION BY ma2.ArtifactId ORDER BY m2.StartedAt DESC) AS RowNum
-//        FROM MIGRATION_ARTIFACT ma2
-//        INNER JOIN MIGRATION m2 ON m2.MigrationId = ma2.MigrationId
-//        WHERE m2.TargetHost = ? AND m2.ScopeType = 'VARIABLE'
-//      ) ma
-//      WHERE ma.RowNum = 1`,
-//     [targetHost]
-//   );
-// }
-
+/**
+ * Per-artifact migration counts per package from SINGLE_ARTIFACT runs,
+ * scoped by host pair. Returns raw counts so the caller can compare against
+ * the live total to compute MIGRATED / PARTIAL / FAILED correctly.
+ */
+async function derivedPackageStatusFromArtifactsForTenantPair(sourceHost, targetHost) {
+  return query(
+    `SELECT
+       m.PackageName,
+       SUM(CASE WHEN latest.Status = 'MIGRATED' THEN 1 ELSE 0 END) AS MigratedCount,
+       SUM(CASE WHEN latest.Status = 'FAILED'   THEN 1 ELSE 0 END) AS FailedCount,
+       COUNT(latest.ArtifactId)                                     AS TotalAttempted,
+       MAX(m.CompletedAt) AS CompletedAt,
+       MAX(m.StartedAt)   AS StartedAt
+     FROM (
+       SELECT ma.ArtifactId, ma.Status, ma.MigrationId,
+              ROW_NUMBER() OVER (
+                PARTITION BY ma.ArtifactId
+                ORDER BY m2.StartedAt DESC
+              ) AS rn
+       FROM MIGRATION_ARTIFACT ma
+       INNER JOIN ${TABLE} m2 ON m2.MigrationId = ma.MigrationId
+       WHERE m2.SourceHost = ?
+         AND m2.TargetHost = ?
+         AND m2.ScopeType = 'SINGLE_ARTIFACT'
+     ) latest
+     INNER JOIN ${TABLE} m ON m.MigrationId = latest.MigrationId
+     WHERE latest.rn = 1
+     GROUP BY m.PackageName`,
+    [sourceHost, targetHost]
+  );
+}
 
 /**
- * Shared implementation behind latestStatusBy*ForTargetHost — most recent
- * MIGRATION_ARTIFACT row per ArtifactId, for a given ScopeType and
- * TargetHost. TargetHost is set at migration-start time (see
- * MigrationModel.create), so this works across ALL users who've ever
- * migrated to that real tenant — not just the caller.
+ * Most recent MIGRATION_ARTIFACT row per ArtifactId for a given ScopeType
+ * and host pair. Shared across all users of the same real tenant pair.
  */
-async function _latestArtifactStatusForTargetHost(targetHost, scopeType) {
+async function _latestArtifactStatusForTenantPair(sourceHost, targetHost, scopeType) {
   return query(
     `SELECT ma.ArtifactId, ma.ArtifactName, ma.Status, ma.StartedAt, ma.CompletedAt
      FROM (
@@ -141,27 +215,29 @@ async function _latestArtifactStatusForTargetHost(targetHost, scopeType) {
               ROW_NUMBER() OVER (PARTITION BY ma2.ArtifactId ORDER BY m2.StartedAt DESC) AS RowNum
        FROM MIGRATION_ARTIFACT ma2
        INNER JOIN MIGRATION m2 ON m2.MigrationId = ma2.MigrationId
-       WHERE m2.TargetHost = ? AND m2.ScopeType = ?
+       WHERE m2.SourceHost = ?
+         AND m2.TargetHost = ?
+         AND m2.ScopeType = ?
      ) ma
      WHERE ma.RowNum = 1`,
-    [targetHost, scopeType]
+    [sourceHost, targetHost, scopeType]
   );
 }
 
-function latestStatusByVariableForTargetHost(targetHost) {
-  return _latestArtifactStatusForTargetHost(targetHost, 'VARIABLE');
+function latestStatusByVariableForTenantPair(sourceHost, targetHost) {
+  return _latestArtifactStatusForTenantPair(sourceHost, targetHost, 'VARIABLE');
 }
 
-function latestStatusByDataStoreForTargetHost(targetHost) {
-  return _latestArtifactStatusForTargetHost(targetHost, 'DATASTORE');
+function latestStatusByDataStoreForTenantPair(sourceHost, targetHost) {
+  return _latestArtifactStatusForTenantPair(sourceHost, targetHost, 'DATASTORE');
 }
 
-function latestStatusByNumberRangeForTargetHost(targetHost) {
-  return _latestArtifactStatusForTargetHost(targetHost, 'NUMBER_RANGE');
+function latestStatusByNumberRangeForTenantPair(sourceHost, targetHost) {
+  return _latestArtifactStatusForTenantPair(sourceHost, targetHost, 'NUMBER_RANGE');
 }
 
-function latestStatusBySecurityForTargetHost(targetHost) {
-  return _latestArtifactStatusForTargetHost(targetHost, 'SECURITY');
+function latestStatusBySecurityForTenantPair(sourceHost, targetHost) {
+  return _latestArtifactStatusForTenantPair(sourceHost, targetHost, 'SECURITY');
 }
 
 async function listBySourceTenant(sourceTenantId) {
@@ -194,10 +270,12 @@ async function findActiveForUser(userId) {
 //module.exports = { create, setStatus, findById, listForUser, listForBatch, latestStatusByPackageForTargetHost, latestStatusByVariableForTargetHost, listBySourceTenant, listByTargetTenant, deleteById, findActiveForUser };
 module.exports = {
   create, setStatus, findById, listForUser, listForBatch,
-  latestStatusByPackageForTargetHost,
-  latestStatusByVariableForTargetHost,
-  latestStatusByDataStoreForTargetHost,
-  latestStatusByNumberRangeForTargetHost,
-  latestStatusBySecurityForTargetHost,
+  latestArtifactStatusByPackageForTenantPair,
+  latestStatusByPackageForTenantPair,
+  derivedPackageStatusFromArtifactsForTenantPair,
+  latestStatusByVariableForTenantPair,
+  latestStatusByDataStoreForTenantPair,
+  latestStatusByNumberRangeForTenantPair,
+  latestStatusBySecurityForTenantPair,
   listBySourceTenant, listByTargetTenant, deleteById, findActiveForUser
 };

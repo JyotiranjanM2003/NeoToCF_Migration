@@ -169,15 +169,20 @@ CREATE INDEX IDX_MIGRATION_SOURCEHOST ON MIGRATION (SourceHost);
 CREATE INDEX IDX_DSOP_TARGETHOST ON DATASTORE_OPERATION (TargetHost);
 
 -- Backfill existing rows (run once, against your live schema)
+-- UPDATE MIGRATION m
+--    SET TargetHost = (SELECT Host FROM TARGET_TENANT t WHERE t.TargetTenantId = m.TargetTenantId),
+--        SourceHost = (SELECT Host FROM SOURCE_TENANT s WHERE s.SourceTenantId = m.SourceTenantId)
+--  WHERE m.SourceHost IS NULL OR m.TargetHost IS NULL;
+
 UPDATE MIGRATION m
    SET TargetHost = (SELECT Host FROM TARGET_TENANT t WHERE t.TargetTenantId = m.TargetTenantId),
        SourceHost = (SELECT Host FROM SOURCE_TENANT s WHERE s.SourceTenantId = m.SourceTenantId)
- WHERE m.TargetHost IS NULL;
+ WHERE m.TargetHost IS NULL OR m.SourceHost IS NULL;
 
 UPDATE DATASTORE_OPERATION d
    SET TargetHost = (SELECT Host FROM TARGET_TENANT t WHERE t.TargetTenantId = d.TargetTenantId),
        SourceHost = (SELECT Host FROM SOURCE_TENANT s WHERE s.SourceTenantId = d.SourceTenantId)
- WHERE d.TargetHost IS NULL;
+ WHERE d.SourceHost IS NULL OR d.TargetHost IS NULL;
 
 
  -- ========== PASSWORD RESET TOKEN ==========

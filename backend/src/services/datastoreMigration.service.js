@@ -138,7 +138,7 @@ async function checkDuplicates({ user, sourceTenant, targetTenant, dataStores = 
     //   ds.integrationFlow || ''
     // );
     const prev = await DataStoreOperationModel.findLatestSuccess(
-      targetTenant.HOST,                    // ← was user.userId, targetTenant.TARGETTENANTID
+      targetTenant.TARGETTENANTID,
       ds.dataStoreName,
       ds.integrationFlow || ''
     );

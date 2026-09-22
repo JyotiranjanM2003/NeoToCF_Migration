@@ -25,7 +25,10 @@ async function listCategories(req, res, next) {
     const [categories, statusRows] = await Promise.all([
       securityMigrationService.listCategories(sourceTenant),
       targetTenant
-        ? MigrationModel.latestStatusBySecurityForTargetHost(targetTenant.HOST)
+        ? MigrationModel.latestStatusBySecurityForTenantPair(
+            sourceTenant.HOST,
+            targetTenant.HOST
+          )
         : Promise.resolve([]),
     ]);
 
@@ -72,7 +75,10 @@ async function listCategoryEntries(req, res, next) {
     if (!result) return res.status(404).json({ message: 'Unknown security category' });
 
     if (targetTenant) {
-      const statusRows = await MigrationModel.latestStatusBySecurityForTargetHost(targetTenant.HOST);
+      const statusRows = await MigrationModel.latestStatusBySecurityForTenantPair(
+            sourceTenant.HOST,
+            targetTenant.HOST
+          );
       const record = statusRows.find((row) => row.ARTIFACTID === result.key);
       result.migrationStatus = record ? record.STATUS : null;
       result.lastMigratedAt = record ? record.COMPLETEDAT || record.STARTEDAT : null;

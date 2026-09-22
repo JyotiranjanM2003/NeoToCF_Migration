@@ -130,14 +130,14 @@ async function listForMigration(migrationId) {
 //   return rows[0] || null;
 // }
 
-async function findLatestSuccess(targetHost, dataStoreName, integrationFlow = '') {
+async function findLatestSuccess(targetTenantId, dataStoreName, integrationFlow = '') {
   const rows = await query(
     `SELECT * FROM ${TABLE}
-     WHERE TargetHost = ? AND DataStoreName = ? AND IntegrationFlow = ?
+     WHERE TargetTenantId = ? AND DataStoreName = ? AND IntegrationFlow = ?
        AND Status = 'SUCCESS'
      ORDER BY CompletedAt DESC
      LIMIT 1`,
-    [targetHost, dataStoreName, integrationFlow]
+    [targetTenantId, dataStoreName, integrationFlow]
   );
   return rows[0] || null;
 }

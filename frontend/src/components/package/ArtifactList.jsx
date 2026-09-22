@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import ArtifactTypeBadge from './ArtifactTypeBadge.jsx';
 import EntityIcon from './EntityIcon.jsx';
+import MigrationStatusBadge from './MigrationStatusBadge.jsx';
 
 export default function ArtifactList({ artifacts, packageId }) {
   const navigate = useNavigate();
@@ -42,10 +43,11 @@ export default function ArtifactList({ artifacts, packageId }) {
                 {a.version}
               </td>
               <td style={tdStyle}>
-                <span className={`badge ${a.status === 'Active' ? 'badge-connected' : 'badge-disconnected'}`}>
-                  <span className="dot" />
-                  {a.status}
-                </span>
+                <MigrationStatusBadge
+                  status={a.migrationStatus}
+                  lastMigratedAt={a.lastMigratedAt}
+                  showIdle
+                />
               </td>
             </tr>
           ))}

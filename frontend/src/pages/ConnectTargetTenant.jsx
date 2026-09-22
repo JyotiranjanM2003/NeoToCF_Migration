@@ -154,7 +154,7 @@ export default function ConnectTargetTenant() {
       {loadError && <div className="error-banner">{loadError}</div>}
 
       {result && (
-        <div className={result.ok ? 'helper-text' : 'error-banner'} style={result.ok ? { color: '#0F6E66', marginBottom: 16 } : {}}>
+        <div className={result.ok ? 'helper-text' : 'error-banner'} style={result.ok ? { color: 'var(--success)', marginBottom: 16 } : {}}>
           {result.ok ? 'Connected successfully. Redirecting…' : result.message}
         </div>
       )}

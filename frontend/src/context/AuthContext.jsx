@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import * as authApi from '../services/api/auth.api';
 import { setAccessToken, setUnauthorizedHandler } from '../services/api/client';
+import { setCacheScope } from '../utils/resourceCache.js';
 
 const AuthContext = createContext(null);
 
@@ -10,6 +11,7 @@ export function AuthProvider({ children }) {
 
   const clearSession = useCallback(() => {
     setAccessToken(null);
+    setCacheScope(null);
     setUser(null);
   }, []);
 
@@ -24,6 +26,7 @@ export function AuthProvider({ children }) {
         const { accessToken } = await authApi.refresh();
         setAccessToken(accessToken);
         const profile = await authApi.me();
+        setCacheScope(profile.userId);
         setUser(profile);
       } catch {
         clearSession();
@@ -36,12 +39,14 @@ export function AuthProvider({ children }) {
   async function signup(form) {
     const { user, accessToken } = await authApi.signup(form);
     setAccessToken(accessToken);
+    setCacheScope(user.userId);
     setUser(user);
   }
 
   async function login(form) {
     const { user, accessToken } = await authApi.login(form);
     setAccessToken(accessToken);
+    setCacheScope(user.userId);
     setUser(user);
   }
 

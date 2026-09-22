@@ -25,7 +25,10 @@ async function list(req, res, next) {
     const [numberRanges, statusRows] = await Promise.all([
       numberRangeService.listSourceNumberRanges(sourceTenant),
       targetTenant
-        ? MigrationModel.latestStatusByNumberRangeForTargetHost(targetTenant.HOST)
+        ? MigrationModel.latestStatusByNumberRangeForTenantPair(
+            sourceTenant.HOST,
+            targetTenant.HOST
+          )
         : Promise.resolve([]),
     ]);
 

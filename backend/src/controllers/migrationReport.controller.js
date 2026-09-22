@@ -11,7 +11,13 @@ async function getReport(req, res, next) {
       return res.status(400).json({ code: 'NO_TARGET_SELECTED', message: 'No target tenant selected. Please select a target tenant first.' });
     }
 
-    const report = await migrationReportService.buildReport(sourceTenant.HOST, targetTenant.HOST);
+    // Pass host strings (not per-user UUIDs) so the report is shared across
+    // all users who point at the same real tenant pair.
+    const report = await migrationReportService.buildReport(
+      sourceTenant.HOST,
+      targetTenant.HOST,
+      sourceTenant
+    );
     res.json({ sourceHost: sourceTenant.HOST, targetHost: targetTenant.HOST, ...report });
   } catch (err) {
     next(err);

@@ -83,6 +83,8 @@ async function runBatchPipeline({ batchId, user, sourceTenant, targetTenant, pac
       userId: user.userId,
       sourceTenantId: sourceTenant.SOURCETENANTID,
       targetTenantId: targetTenant.TARGETTENANTID,
+      sourceHost: sourceTenant.HOST,
+      targetHost: targetTenant.HOST,
       packageName: packageId,
       scopeType: 'PACKAGE',
       batchId,

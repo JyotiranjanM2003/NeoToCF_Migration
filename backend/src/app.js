@@ -10,10 +10,32 @@ const { notFoundHandler, errorHandler } = require('./middleware/error.middleware
 
 const app = express();
 
-app.use(helmet());
+app.use(helmet({
+  // Disable helmet's default CSP — the frontend is a separate CF app served
+  // from its own origin, so CSP must be configured per-deployment rather
+  // than via a blanket default that blocks legitimate same-app resources.
+  contentSecurityPolicy: false,
+}));
+
+// Allow requests from all configured client origins. CLIENT_ORIGIN can be a
+// comma-separated list so multiple frontends (local dev + CF deployments) can
+// be allowed at once, e.g.:
+//   CLIENT_ORIGIN=http://localhost:3000,https://neo-cf-migration-frontend.cfapps.us10-004.hana.ondemand.com
+const allowedOrigins = (process.env.CLIENT_ORIGIN || 'https://neo-cf-migration-frontend.cfapps.eu10-004.hana.ondemand.com')
+  .split(',')
+  .map((o) => o.trim().replace(/\/$/, ''))  // strip any trailing slash — browsers never include one in Origin
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || 'https://neo-cf-migration-frontend.cfapps.us10-004.hana.ondemand.com',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (curl, Postman, same-origin server calls)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      // Return false (not an Error) so cors sends a plain response without
+      // the ACAO header — avoids a 500 from Express's error handler.
+      return callback(null, false);
+    },
     credentials: true,
   })
 );

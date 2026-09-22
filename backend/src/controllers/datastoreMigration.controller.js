@@ -44,7 +44,10 @@ async function list(req, res, next) {
     const [dataStores, statusRows] = await Promise.all([
       datastoreMigrationService.listSourceDataStores(sourceTenant),
       targetTenant
-        ? MigrationModel.latestStatusByDataStoreForTargetHost(targetTenant.HOST)
+        ? MigrationModel.latestStatusByDataStoreForTenantPair(
+            sourceTenant.HOST,
+            targetTenant.HOST
+          )
         : Promise.resolve([]),
     ]);
 

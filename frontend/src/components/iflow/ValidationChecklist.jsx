@@ -9,7 +9,7 @@ export default function ValidationChecklist({ validation }) {
       {validation.checks.map((c) => (
   <div key={c.check} style={{ marginBottom: 8 }}>
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
-      <span style={{ color: c.passed ? 'var(--accent)' : 'var(--danger)', fontWeight: 700 }}>
+      <span style={{ color: c.passed ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
         {c.passed ? '✓' : '✗'}
       </span>
       {c.check}
@@ -27,7 +27,7 @@ export default function ValidationChecklist({ validation }) {
           fontWeight: 700,
           fontFamily: 'var(--font-mono)',
           fontSize: 13,
-          color: validation.result === 'READY' ? 'var(--accent)' : 'var(--danger)',
+          color: validation.result === 'READY' ? 'var(--success)' : 'var(--danger)',
         }}
       >
         Result: {validation.result === 'READY' ? 'READY FOR MIGRATION' : 'MIGRATION BLOCKED'}

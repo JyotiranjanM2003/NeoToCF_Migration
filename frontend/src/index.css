@@ -3,25 +3,28 @@
    ============================================================ */
 :root {
   /* Color */
-  --bg: #F5F6F8;
+  --bg: #F7F7F7;
   --surface: #FFFFFF;
-  --surface-sunken: #ECEEF2;
-  --ink: #12161C;
-  --ink-muted: #5B6472;
-  --border: #D8DCE3;
-  --line: #C4CAD4;
+  --surface-sunken: #EEF1F3;
+  --ink: #1D2D3E;
+  --ink-muted: #556B82;
+  --border: #D9D9D9;
+  --line: #A9B4BE;
 
-  --accent: #0F6E66;         /* teal — primary / connected */
-  --accent-soft: #E3F0EE;
-  --accent-strong: #0B534D;
+  --accent: #0070F2;         /* SAP blue — primary / interactive */
+  --accent-soft: #E5F0FF;
+  --accent-strong: #0057D2;
+  --success: #107E3E;
+  --success-soft: #E5F5E5;
+  --success-strong: #0A6E31;
 
-  --warn: #B45309;
-  --warn-soft: #FBF0E1;
-  --danger: #B91C1C;
-  --danger-soft: #FBEAEA;
+  --warn: #E9730C;
+  --warn-soft: #FFF3E0;
+  --danger: #BB0000;
+  --danger-soft: #FFEAEA;
 
   /* Hover surface — slightly darker than surface-sunken */
-  --surface-hover: #E4E7ED;
+  --surface-hover: #E8EBED;
 
   /* Type */
   --font-display: 'IBM Plex Sans', system-ui, sans-serif;
@@ -30,7 +33,7 @@
 
   /* Layout */
   --radius: 6px;
-  --shadow-card: 0 1px 2px rgba(18, 22, 28, 0.06), 0 1px 1px rgba(18, 22, 28, 0.04);
+  --shadow-card: 0 1px 2px rgba(29, 45, 62, 0.08), 0 1px 1px rgba(29, 45, 62, 0.04);
   --sidebar-width: 220px;
 }
 
@@ -354,8 +357,8 @@ a:focus-visible {
 
 .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
 
-.badge-connected { background: var(--accent-soft); color: var(--accent-strong); }
-.badge-connected .dot { background: var(--accent); }
+.badge-connected { background: var(--success-soft); color: var(--success-strong); }
+.badge-connected .dot { background: var(--success); }
 
 .badge-disconnected { background: var(--surface-sunken); color: var(--ink-muted); }
 .badge-disconnected .dot { background: #A6ACB6; }
@@ -542,7 +545,7 @@ a:focus-visible {
 }
 
 .step.done .step-num {
-  background: var(--accent);
+  background: var(--success);
   color: white;
 }
 .step.done .step-label { color: var(--ink); }
@@ -850,7 +853,7 @@ a:focus-visible {
 .report-stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; margin-bottom: 4px; }
 .report-stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); }
 
-.report-stat-card.report-stat-success .report-stat-value { color: var(--accent-strong); }
+.report-stat-card.report-stat-success .report-stat-value { color: var(--success-strong); }
 .report-stat-card.report-stat-danger .report-stat-value { color: var(--danger); }
 .report-stat-card.report-stat-warn .report-stat-value { color: var(--warn); }
 .report-stat-card.report-stat-info .report-stat-value { color: var(--ink-muted); }
@@ -1542,7 +1545,7 @@ a:focus-visible {
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700;
 }
-.check-done { background: var(--accent-soft); color: var(--accent-strong); }
+.check-done { background: var(--success-soft); color: var(--success-strong); }
 .check-todo { background: var(--warn-soft); color: var(--warn); }
 .check-main { flex: 1; min-width: 0; }
 .check-title { display: block; font-size: 13.5px; font-weight: 600; }
@@ -1598,23 +1601,26 @@ a:focus-visible {
    Only redefines tokens, so every component above follows.
    ============================================================ */
 :root[data-theme="dark"] {
-  --bg: #0E1114;
-  --surface: #171B20;
-  --surface-sunken: #1F252B;
-  --surface-hover: #232A31;
-  --ink: #EDEFF2;
-  --ink-muted: #939BA5;
-  --border: #2A3138;
-  --line: #3A424B;
+  --bg: #0F1114;
+  --surface: #1D1E20;
+  --surface-sunken: #15171A;
+  --surface-hover: #25282C;
+  --ink: #F5F6F7;
+  --ink-muted: #B7C0CA;
+  --border: #3A3D41;
+  --line: #5B626A;
 
-  --accent: #3FA58F;
-  --accent-soft: #16302B;
-  --accent-strong: #9FD9C9;
+  --accent: #1B90FF;
+  --accent-soft: #102A43;
+  --accent-strong: #8CC8FF;
+  --success: #5DC122;
+  --success-soft: #193218;
+  --success-strong: #B5E88B;
 
-  --warn: #D9A441;
-  --warn-soft: #2E2413;
-  --danger: #F08078;
-  --danger-soft: #331715;
+  --warn: #FFB366;
+  --warn-soft: #3A2817;
+  --danger: #FF5F5F;
+  --danger-soft: #3A1818;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
@@ -1627,23 +1633,26 @@ a:focus-visible {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0E1114;
-    --surface: #171B20;
-    --surface-sunken: #1F252B;
-    --surface-hover: #232A31;
-    --ink: #EDEFF2;
-    --ink-muted: #939BA5;
-    --border: #2A3138;
-    --line: #3A424B;
+    --bg: #0F1114;
+    --surface: #1D1E20;
+    --surface-sunken: #15171A;
+    --surface-hover: #25282C;
+    --ink: #F5F6F7;
+    --ink-muted: #B7C0CA;
+    --border: #3A3D41;
+    --line: #5B626A;
 
-    --accent: #3FA58F;
-    --accent-soft: #16302B;
-    --accent-strong: #9FD9C9;
+    --accent: #1B90FF;
+    --accent-soft: #102A43;
+    --accent-strong: #8CC8FF;
+    --success: #5DC122;
+    --success-soft: #193218;
+    --success-strong: #B5E88B;
 
-    --warn: #D9A441;
-    --warn-soft: #2E2413;
-    --danger: #F08078;
-    --danger-soft: #331715;
+    --warn: #FFB366;
+    --warn-soft: #3A2817;
+    --danger: #FF5F5F;
+    --danger-soft: #3A1818;
 
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);
   }

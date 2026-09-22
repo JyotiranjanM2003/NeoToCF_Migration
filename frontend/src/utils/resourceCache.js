@@ -13,18 +13,27 @@
  *   'packages'     – Packages page list
  *   'numberranges' – SecurityMaterials / Number Ranges list
  *
- * Call invalidateAll() in Dashboard after any tenant select/delete so that
- * switching tenants never serves stale data from a previous tenant.
+ * Tenant selection still calls invalidateAll() so switching tenants never
+ * serves stale data from a previous tenant pair.
  */
 
 const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 minutes
+let activeScope = 'anonymous';
 
 const store = new Map(); // key → { data, expiresAt }
+
+/** Switch the cache namespace when the authenticated account changes. */
+export function setCacheScope(scope) {
+  const nextScope = scope ? String(scope) : 'anonymous';
+  if (nextScope === activeScope) return;
+  activeScope = nextScope;
+  store.clear();
+}
 
 /** Returns cached data or null if missing/stale. */
 export function getCache(key) {
   const entry = store.get(key);
-  if (!entry) return null;
+  if (!entry || entry.scope !== activeScope) return null;
   if (Date.now() > entry.expiresAt) {
     store.delete(key);
     return null;
@@ -34,7 +43,7 @@ export function getCache(key) {
 
 /** Stores data under key for ttlMs milliseconds (default 5 min). */
 export function setCache(key, data, ttlMs = DEFAULT_TTL_MS) {
-  store.set(key, { data, expiresAt: Date.now() + ttlMs });
+  store.set(key, { data, expiresAt: Date.now() + ttlMs, scope: activeScope });
 }
 
 /** Removes a single key so the next load re-fetches. */

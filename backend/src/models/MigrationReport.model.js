@@ -1,6 +1,10 @@
 const { query } = require('../config/db');
 
-/** One row per migration run that has a package-level identity (PACKAGE / SINGLE_ARTIFACT). */
+/**
+ * All migration runs for a source/target host pair, across ALL users.
+ * Scoping by hostname (not per-user UUID) means any user who points at the
+ * same real tenant pair sees the full shared migration history.
+ */
 async function listMigrationsForTenantPair(sourceHost, targetHost) {
   return query(
     `SELECT MigrationId, PackageName, ScopeType, Status, StartedAt, CompletedAt
@@ -11,7 +15,7 @@ async function listMigrationsForTenantPair(sourceHost, targetHost) {
   );
 }
 
-/** One row per individual artifact (iFlow, variable, data store, number range, security category). */
+/** All artifact rows for a source/target host pair, across ALL users. */
 async function listArtifactsForTenantPair(sourceHost, targetHost) {
   return query(
     `SELECT ma.Id, ma.MigrationId, ma.ArtifactId, ma.ArtifactName, ma.ArtifactType,

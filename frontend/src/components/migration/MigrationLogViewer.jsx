@@ -3,7 +3,7 @@ import { formatIndiaTime } from '../../utils/dateTime.js';
 
 const STATUS_COLOR = {
   STARTED: 'var(--ink-muted)',
-  SUCCESS: 'var(--accent)',
+  SUCCESS: 'var(--success)',
   WARNING: 'var(--warn)',
   ERROR: 'var(--danger)',
 };

@@ -31,7 +31,10 @@ async function list(req, res, next) {
       //   ? MigrationModel.latestStatusByVariableForUser(req.user.userId, targetTenant.TARGETTENANTID)
       //   : Promise.resolve([]),
       targetTenant
-        ? MigrationModel.latestStatusByVariableForTargetHost(targetTenant.HOST)
+        ? MigrationModel.latestStatusByVariableForTenantPair(
+            sourceTenant.HOST,
+            targetTenant.HOST
+          )
         : Promise.resolve([]),
     ]);
 
