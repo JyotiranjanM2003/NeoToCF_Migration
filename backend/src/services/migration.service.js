@@ -14,6 +14,14 @@ const MigrationConfigurationModel = require('../models/MigrationConfiguration.mo
 const MigrationLogModel = require('../models/MigrationLog.model');
 const TransformRuleModel = require('../models/TransformRule.model');
 const MigrationBatchModel = require('../models/MigrationBatch.model');
+const SourceTenantModel = require('../models/SourceTenant.model');
+
+// PackageName is intentionally kept as the CPI technical ID because the
+// migration engine and status queries use it as the package key. The report
+// also needs the user-facing package Name, so cache the source package list
+// briefly while a batch report is being polled.
+const packageDisplayCache = new Map();
+const PACKAGE_DISPLAY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const STEPS = {
   GET_PACKAGE: 'GET_PACKAGE',
@@ -438,9 +446,10 @@ async function getBatchStatus(batchId, userId) {
   if (!batch) return null;
 
   const migrations = await MigrationModel.listForBatch(batchId, userId);
+  const displayNames = await getPackageDisplayNames(batch, userId);
   const migrationsWithArtifacts = await Promise.all(
     migrations.map(async (migration) => ({
-      migration,
+      migration: withPackageDisplayName(migration, displayNames),
       artifacts: await MigrationArtifactModel.listForMigration(migration.MIGRATIONID),
     }))
   );
@@ -453,6 +462,7 @@ async function getBatchReport(batchId, userId) {
   if (!batch) return null;
 
   const migrations = await MigrationModel.listForBatch(batchId, userId);
+  const displayNames = await getPackageDisplayNames(batch, userId);
   const migrationsWithDetail = await Promise.all(
     migrations.map(async (migration) => {
       const artifacts = await MigrationArtifactModel.listForMigration(migration.MIGRATIONID);
@@ -463,11 +473,47 @@ async function getBatchReport(batchId, userId) {
         }))
       );
       const logs = await MigrationLogModel.listForMigration(migration.MIGRATIONID);
-      return { migration, artifacts: artifactsWithConfig, logs };
+      return {
+        migration: withPackageDisplayName(migration, displayNames),
+        artifacts: artifactsWithConfig,
+        logs,
+      };
     })
   );
 
   return { batch, migrations: migrationsWithDetail };
+}
+
+async function getPackageDisplayNames(batch, userId) {
+  const sourceTenantId = batch.SOURCETENANTID;
+  if (!sourceTenantId) return new Map();
+
+  const cached = packageDisplayCache.get(sourceTenantId);
+  if (cached && cached.expiresAt > Date.now()) return cached.names;
+
+  try {
+    const sourceTenant = await SourceTenantModel.findById(sourceTenantId, userId);
+    if (!sourceTenant) return new Map();
+
+    const packages = await packageService.listPackages(sourceTenant);
+    const names = new Map(packages.map((pkg) => [pkg.id, pkg.name]));
+    packageDisplayCache.set(sourceTenantId, {
+      names,
+      expiresAt: Date.now() + PACKAGE_DISPLAY_CACHE_TTL_MS,
+    });
+    return names;
+  } catch {
+    // Reporting must still work if the source tenant is temporarily
+    // unavailable; the technical ID remains a safe fallback.
+    return new Map();
+  }
+}
+
+function withPackageDisplayName(migration, displayNames) {
+  return {
+    ...migration,
+    PACKAGE_DISPLAY_NAME: displayNames.get(migration.PACKAGENAME) || migration.PACKAGENAME,
+  };
 }
 
 module.exports = { start, startBatch, getStatus, getReport, getBatchStatus, getBatchReport, STEPS };

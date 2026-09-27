@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell.jsx';
 import PageHeader from '../components/common/PageHeader.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
@@ -18,15 +18,45 @@ import { invalidateAll } from '../utils/resourceCache.js';
  * Dashboard is an overview rather than a setup screen.
  */
 export default function TenantConnection() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const { tenants, reload } = useConsoleSummary();
+  const { tenants, error: summaryError, refreshTenants } = useConsoleSummary();
 
   const [busyId, setBusyId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   const sourceTenants = tenants.sourceAll;
   const targetTenants = tenants.targetAll;
+
+  // Add/reconfigure forms navigate here with this marker because the
+  // summary hook may otherwise still hold the previous in-memory tenant list.
+  useEffect(() => {
+    if (!location.state?.refreshTenants) return;
+
+    invalidateAll();
+    refreshTenants().catch((err) => {
+      setError(err.response?.data?.message || 'Failed to refresh tenants');
+    });
+
+    // Consume the marker so browser history/back navigation does not trigger
+    // another refresh for the same save operation.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, refreshTenants]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setError('');
+    invalidateAll();
+    try {
+      await refreshTenants();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to refresh tenants');
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function run(action, id, setter) {
     setter(id);
@@ -34,7 +64,9 @@ export default function TenantConnection() {
     try {
       await action(id);
       invalidateAll(); // tenant pair changed → every cached list is from the wrong tenant
-      await reload();
+      // The API action has completed successfully; refresh the tenant lists
+      // so the selected/deleted card and tenant rail update immediately.
+      await refreshTenants();
     } catch (err) {
       setError(err.response?.data?.message || 'Action failed');
     } finally {
@@ -102,10 +134,12 @@ export default function TenantConnection() {
         title="Tenant Connection"
         subtitle="Manage the Neo and Cloud Foundry tenants this console migrates between."
       >
-        <button className="btn" onClick={reload}>↻ Refresh</button>
+        <button className="btn" onClick={handleRefresh} disabled={refreshing}>
+          {refreshing ? '↻ Refreshing…' : '↻ Refresh'}
+        </button>
       </PageHeader>
 
-      {error && <div className="error-banner">{error}</div>}
+      {(error || summaryError) && <div className="error-banner">{error || summaryError}</div>}
 
       {tenants.loaded && !bothReady && (
         <div className="warn-banner">

@@ -85,7 +85,9 @@ export default function BatchMigrationReport() {
 
       {status?.migrations?.map(({ migration, artifacts }) => (
         <div key={migration.MIGRATIONID} style={{ marginBottom: 28 }}>
-          <h3 style={{ marginBottom: 8 }}>{migration.PACKAGENAME}</h3>
+          <h3 className="migration-package-name" style={{ marginBottom: 8 }}>
+            {migration.PACKAGE_DISPLAY_NAME || migration.PACKAGENAME}
+          </h3>
           <MigrationProgress migration={migration} artifacts={artifacts} />
 
           {perPackageLogs.get(migration.MIGRATIONID) && (

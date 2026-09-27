@@ -33,6 +33,11 @@ async function buildReport(sourceHost, targetHost, sourceTenant = null) {
     MigrationReportModel.listArtifactsForTenantPair(sourceHost, targetHost),
   ]);
 
+  // MIGRATION.PACKAGENAME remains the technical package ID because it is
+  // used by migration/status queries. Resolve a separate display name for
+  // package rows in the user-facing report.
+  const packageDisplayNames = await getPackageDisplayNames(sourceTenant);
+
   const rows = [];
 
   // Track which packages already have a whole-package run row so we don't
@@ -45,7 +50,7 @@ async function buildReport(sourceHost, targetHost, sourceTenant = null) {
     rows.push({
       migrationId: m.MIGRATIONID,
       category: 'Package',
-      name: m.PACKAGENAME,
+      name: packageDisplayNames.get(m.PACKAGENAME) || m.PACKAGENAME,
       type: 'Package',
       status: normalizeStatus(m.STATUS),
       startedAt: m.STARTEDAT,
@@ -139,7 +144,7 @@ async function buildReport(sourceHost, targetHost, sourceTenant = null) {
     rows.push({
       migrationId: latestArtifact.MIGRATIONID,
       category: 'Package',
-      name: packageName,
+      name: packageDisplayNames.get(packageName) || packageName,
       type: 'Artifact-by-Artifact',
       status,
       startedAt: latestArtifact.STARTEDAT,
@@ -160,6 +165,19 @@ async function buildReport(sourceHost, targetHost, sourceTenant = null) {
   );
 
   return { rows, summary };
+}
+
+async function getPackageDisplayNames(sourceTenant) {
+  if (!sourceTenant) return new Map();
+
+  try {
+    const packages = await packageService.listPackages(sourceTenant);
+    return new Map(packages.map((pkg) => [pkg.id, pkg.name]));
+  } catch {
+    // Keep the report available if the source tenant is temporarily
+    // unavailable; the technical ID is a safe fallback.
+    return new Map();
+  }
 }
 
 /**

@@ -272,7 +272,7 @@ export default function DataStores() {
         <h2 style={{ margin: 0 }}>Data Stores{dataStores ? ` (${dataStores.length})` : ''}</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => { invalidateCache(DS_CACHE_KEY); loadDataStores(true); }} disabled={refreshing} style={{ width: 'auto' }}>
-            {refreshing ? '↻ Loading…' : '↻ Refresh'}
+            {refreshing ? '↻ Refreshing…' : '↻ Refresh'}
           </button>
           <button
             className="btn"

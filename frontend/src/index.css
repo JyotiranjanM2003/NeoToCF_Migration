@@ -1275,6 +1275,11 @@ a:focus-visible {
 }
 
 /* ---------- migration results list ---------- */
+.migration-package-name {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .result-row {
   display: flex;
   align-items: center;
@@ -1502,7 +1507,12 @@ a:focus-visible {
 .stat-bar { height: 4px; border-radius: 4px; background: var(--surface-sunken); overflow: hidden; margin-top: 10px; }
 .stat-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.4s ease; }
 
-.dash-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
 
 /* ---------- coverage rows ---------- */
 .coverage-row {

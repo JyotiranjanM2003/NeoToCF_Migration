@@ -27,6 +27,7 @@ export const CONTENT_TYPES = [
 const MIGRATED = ['MIGRATED', 'SUCCESS', 'UPDATED'];
 const TTL = 3 * 60 * 1000;
 const TENANT_CACHE_KEY = 'tenants';
+const REPORT_CACHE_KEY = 'migration-report-v2';
 const TENANT_TTL = 2 * 60 * 1000; // 2 minutes — short so connection-state stays fresh
 
 function tally(rows) {
@@ -74,9 +75,26 @@ export function readCachedCounts() {
 export default function useConsoleSummary() {
   const [tenants, setTenants] = useState(() => getCache(TENANT_CACHE_KEY) ?? { source: null, target: null, loaded: false });
   const [counts, setCounts] = useState(() => readCachedCounts());
-  const [report, setReport] = useState(() => getCache('migration-report'));
+  const [report, setReport] = useState(() => getCache(REPORT_CACHE_KEY));
   const [loading, setLoading] = useState(!getCache(TENANT_CACHE_KEY));
   const [error, setError] = useState('');
+
+  const fetchTenants = useCallback(async () => {
+    const [sourceData, targetData] = await Promise.all([
+      tenantApi.listSourceTenants(),
+      tenantApi.listTargetTenants(),
+    ]);
+    const freshTenants = {
+      source: (sourceData.tenants || []).find((t) => t.selected) || null,
+      target: (targetData.tenants || []).find((t) => t.selected) || null,
+      sourceAll: sourceData.tenants || [],
+      targetAll: targetData.tenants || [],
+      loaded: true,
+    };
+    setCache(TENANT_CACHE_KEY, freshTenants, TENANT_TTL);
+    setTenants(freshTenants);
+    return freshTenants;
+  }, []);
 
   const load = useCallback(async (force = false) => {
     setError('');
@@ -88,19 +106,7 @@ export default function useConsoleSummary() {
     } else {
       setLoading(true);
       try {
-        const [sourceData, targetData] = await Promise.all([
-          tenantApi.listSourceTenants(),
-          tenantApi.listTargetTenants(),
-        ]);
-        const freshTenants = {
-          source: (sourceData.tenants || []).find((t) => t.selected) || null,
-          target: (targetData.tenants || []).find((t) => t.selected) || null,
-          sourceAll: sourceData.tenants || [],
-          targetAll: targetData.tenants || [],
-          loaded: true,
-        };
-        setCache(TENANT_CACHE_KEY, freshTenants, TENANT_TTL);
-        setTenants(freshTenants);
+        await fetchTenants();
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to load tenants');
         setTenants((prev) => ({ ...prev, loaded: true }));
@@ -137,12 +143,12 @@ export default function useConsoleSummary() {
 
     // ── Recent runs ──
     try {
-      const cachedReport = !force && getCache('migration-report');
+      const cachedReport = !force && getCache(REPORT_CACHE_KEY);
       if (cachedReport) {
         setReport(cachedReport);
       } else {
         const data = await migrationReportApi.getMigrationReport();
-        setCache('migration-report', data, 2 * 60 * 1000);
+        setCache(REPORT_CACHE_KEY, data, 2 * 60 * 1000);
         setReport(data);
       }
     } catch {
@@ -150,11 +156,35 @@ export default function useConsoleSummary() {
     }
 
     setLoading(false);
-  }, []);
+  }, [fetchTenants]);
+
+  const refreshTenants = useCallback(async () => {
+    setError('');
+    setLoading(true);
+    try {
+      return await fetchTenants();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to refresh tenants');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchTenants]);
 
   useEffect(() => {
     load(false);
   }, [load]);
 
-  return { tenants, counts, report, loading, error, reload: () => { invalidateCache(TENANT_CACHE_KEY); return load(true); } };
+  return {
+    tenants,
+    counts,
+    report,
+    loading,
+    error,
+    refreshTenants,
+    reload: () => {
+      invalidateCache(TENANT_CACHE_KEY);
+      return load(true);
+    },
+  };
 }

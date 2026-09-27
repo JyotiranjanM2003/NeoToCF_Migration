@@ -108,8 +108,7 @@ export default function SecurityArtifacts() {
 <span className="mono"> sap_cloudintegrationcertificate </span>
 to the Neo tenant keystore. Enter the alias assigned to this imported certificate
 (for example, <span className="mono">cf_transport</span>). This value is
-case-sensitive and must match the <span className="mono">targetCertificateAlias</span>
-used by the “CPI MIG090 Security Artifacts” Postman collection.
+case-sensitive and must match the <span className="mono">targetCertificateAlias</span> used by the “CPI MIG090 Security Artifacts” Postman collection.
             </p>
 
             <form onSubmit={handleVerify}>
